@@ -1,0 +1,4256 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ほのぼの生活シム（仮）</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700;900&family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+  :root{
+    --sky1:#BEE7F5; --sky2:#E8F6E0;
+    --cream:#FFF8EA; --wood:#B9845; --wood-d:#8C6230;
+    --ink:#4A3A2A; --leaf:#6FAE5C; --leaf-d:#4E8B3E;
+    --accent:#FF9F6B; --accent-2:#FFC96B; --water:#8FD3E8; --pink:#FFB4C6;
+    --panel:#FFF8EA; --shadow:rgba(90,70,40,.25);
+    --title-color:#8C6230; --title-shadow:#fff; --sub-color:#7a9c68;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:linear-gradient(180deg, var(--sky1), var(--sky2));
+    font-family:'Noto Sans JP',sans-serif;
+    color:var(--ink);
+    min-height:100vh;
+    display:flex;flex-direction:column;align-items:center;
+    padding:18px 12px 40px;
+  }
+  h1,h2,h3,.disp{font-family:'Zen Maru Gothic',sans-serif;}
+  .wrap{width:100%;max-width:620px;}
+
+  .title-row{text-align:center;margin-bottom:10px;}
+  .title-row h1{font-size:26px;color:var(--title-color);margin:0;text-shadow:2px 2px 0 var(--title-shadow);transition:color .6s ease,text-shadow .6s ease;}
+  .title-row .sub{font-size:11px;letter-spacing:2px;color:var(--sub-color);font-weight:700;transition:color .6s ease;}
+
+  .panel{
+    background:var(--panel);
+    border:4px solid #fff;
+    border-radius:22px;
+    box-shadow:0 10px 0 var(--shadow), 0 14px 24px rgba(90,70,40,.18);
+    padding:18px;
+    margin-bottom:14px;
+  }
+
+  /* ---------- Start screen ---------- */
+  .start-field{margin-bottom:14px;}
+  .start-field label{display:block;font-size:12.5px;font-weight:700;color:var(--wood-d);margin-bottom:6px;}
+  .start-field input{
+    width:100%;padding:10px 12px;border-radius:12px;border:2px solid #e6d9bd;
+    font-family:'Noto Sans JP';font-size:14px;background:#fffef9;
+  }
+  .avatar-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;}
+  .avatar-btn{
+    width:46px;height:46px;border-radius:50%;border:3px solid #e6d9bd;background:#fffef9;
+    font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center;
+  }
+  .avatar-btn.active{border-color:var(--accent);background:#FFEFE0;}
+  .btn{
+    font-family:'Zen Maru Gothic';font-weight:900;font-size:14.5px;
+    background:var(--accent);color:#fff;border:none;border-radius:999px;
+    padding:12px 26px;cursor:pointer;box-shadow:0 5px 0 #E07E4A;
+    transition:transform .08s ease;
+  }
+  .btn:active{transform:translateY(4px);box-shadow:0 1px 0 #E07E4A;}
+  .btn.secondary{background:#8FBF7F;box-shadow:0 5px 0 #5F9450;}
+  .btn.blue{background:#6FB6D9;box-shadow:0 5px 0 #4A8CAE;}
+  .btn:disabled{opacity:.4;cursor:default;}
+  .btn-row{display:flex;gap:10px;flex-wrap:wrap;}
+
+  /* ---------- Game HUD ---------- */
+  .hud-top{display:flex;justify-content:flex-start;align-items:center;margin-bottom:8px;flex-wrap:nowrap;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px;}
+  .hud-chip{
+    background:#fff;border-radius:999px;padding:6px 14px;font-size:12.5px;font-weight:700;
+    box-shadow:0 3px 0 rgba(90,70,40,.15);color:var(--wood-d);
+    flex-shrink:0;white-space:nowrap;
+  }
+  .hud-chip.bgm-chip{
+    max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+  .light-gauge-wrap{
+    display:flex;align-items:center;gap:8px;background:#2b2038;border-radius:999px;
+    padding:6px 14px;margin-bottom:8px;box-shadow:0 3px 0 rgba(0,0,0,.2);
+  }
+  .light-gauge-label{font-size:12px;font-weight:900;color:#FFD23F;white-space:nowrap;}
+  .light-gauge-track{flex:1;height:10px;border-radius:999px;background:rgba(255,255,255,.15);overflow:hidden;}
+  .light-gauge-fill{height:100%;background:linear-gradient(90deg,#FFD23F,#FF9F6B);border-radius:999px;transition:width .2s linear;}
+  .light-gauge-fill.flicker{animation:paleFlicker .9s ease;}
+  @keyframes paleFlicker{
+    0%{background:linear-gradient(90deg,#FFD23F,#FF9F6B);}
+    30%{background:#F2EFE7;}
+    60%{background:#EDEAE3;}
+    100%{background:linear-gradient(90deg,#FFD23F,#FF9F6B);}
+  }
+  #devPanel{
+    position:fixed; top:10px; right:10px; z-index:9999;
+    background:rgba(20,20,26,.92); color:#F2EFE7; border-radius:12px;
+    padding:10px 12px; width:210px; font-size:12px;
+    box-shadow:0 6px 20px rgba(0,0,0,.4); max-height:90vh; overflow-y:auto;
+  }
+  .dev-title{font-weight:900; font-size:11px; color:#FFD23F; margin-bottom:6px;}
+  .dev-row{display:flex; gap:6px; margin-bottom:6px;}
+  .dev-btn{
+    flex:1; background:#3A3550; color:#F2EFE7; border:1px solid #55507A; border-radius:8px;
+    padding:6px 8px; font-size:11.5px; cursor:pointer; font-family:inherit;
+  }
+  .dev-btn:hover{background:#4A4568;}
+  #canvasWrap3d{
+    display:block;border-radius:18px;border:4px solid #fff;
+    box-shadow:0 6px 0 var(--shadow);
+    background:linear-gradient(180deg,#BEE7F5,#DFF3E4);
+    touch-action:none;
+    max-width:100%;
+    overflow:hidden;
+    position:relative;
+    line-height:0;
+  }
+  #canvasWrap3d canvas{ display:block; width:100%; height:auto; cursor:pointer; }
+  .tilt-band{
+    position:absolute; left:0; right:0; pointer-events:none;
+    backdrop-filter:blur(3.5px); -webkit-backdrop-filter:blur(3.5px);
+  }
+  .tilt-band.top{ top:0; height:22%; background:linear-gradient(180deg, rgba(255,255,255,.35), rgba(255,255,255,0)); }
+  .tilt-band.bottom{ bottom:0; height:26%; background:linear-gradient(0deg, rgba(255,255,255,.35), rgba(255,255,255,0)); }
+  .canvas-wrap{position:relative;}
+  .prompt-bubble{
+    position:absolute;left:50%;top:8px;transform:translateX(-50%);
+    background:#fff;border-radius:999px;padding:6px 14px;font-size:12px;font-weight:700;
+    box-shadow:0 3px 0 rgba(90,70,40,.15);color:var(--wood-d);pointer-events:none;
+    display:none;white-space:nowrap;z-index:5;
+  }
+  .toast-bubble{
+    top:44px;background:#2b2038;color:#F2EFE7;white-space:normal;max-width:88%;
+    text-align:center;line-height:1.5;z-index:6;border-radius:14px;
+  }
+
+  .controls-row{display:flex;justify-content:space-between;align-items:flex-end;margin-top:10px;gap:10px;flex-wrap:wrap;}
+  .dpad{display:grid;grid-template-columns:repeat(3,48px);grid-template-rows:repeat(3,48px);gap:4px;touch-action:none;}
+  .dbtn{
+    background:#fff;border:none;border-radius:12px;font-size:18px;cursor:pointer;
+    box-shadow:0 3px 0 rgba(90,70,40,.2);user-select:none;touch-action:none;
+  }
+  .dbtn:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(90,70,40,.2);}
+  .right-controls{display:flex;align-items:flex-end;gap:12px;touch-action:none;}
+  .run-btn{
+    width:56px;height:56px;border-radius:50%;background:#fff;color:var(--wood-d);
+    font-family:'Zen Maru Gothic';font-weight:900;font-size:11px;border:3px solid #8FBF7F;cursor:pointer;
+    box-shadow:0 4px 0 #cfd9c5;user-select:none;touch-action:none;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.1;
+  }
+  .run-btn.active{background:#8FBF7F;color:#fff;box-shadow:0 4px 0 #5F9450;}
+  .run-btn:active{transform:translateY(3px);}
+  .action-btn{
+    width:74px;height:74px;border-radius:50%;background:var(--accent);color:#fff;
+    font-family:'Zen Maru Gothic';font-weight:900;font-size:13px;border:none;cursor:pointer;
+    box-shadow:0 5px 0 #E07E4A;user-select:none;touch-action:none;
+  }
+  .action-btn:active{transform:translateY(4px);box-shadow:0 1px 0 #E07E4A;}
+
+  .inv-strip{display:flex;gap:8px;overflow-x:auto;padding:10px 4px;margin-top:8px;}
+  .inv-item{
+    flex:0 0 auto;background:#fff;border-radius:12px;padding:6px 10px;text-align:center;
+    box-shadow:0 3px 0 rgba(90,70,40,.15);min-width:48px;
+  }
+  .inv-item .ii-icon{font-size:20px;}
+  .inv-item .ii-count{font-size:11px;font-weight:900;color:var(--wood-d);}
+
+  .acquire-log-wrap{
+    background:var(--panel); border:3px solid #fff; border-radius:16px;
+    padding:10px 14px; margin-top:4px; box-shadow:0 4px 0 rgba(90,70,40,.15);
+  }
+  .acquire-log-title{font-family:'Zen Maru Gothic';font-weight:900;font-size:12.5px;color:var(--wood-d);margin-bottom:6px;}
+  .acquire-log{max-height:130px;overflow-y:auto;display:flex;flex-direction:column;gap:3px;}
+  .log-row{font-size:12px;color:#5b4a34;padding:3px 8px;background:#fffef9;border-radius:8px;}
+  .log-row:first-child{background:#FFF3D6;font-weight:700;}
+  .log-empty{font-size:11.5px;color:#a08f6f;}
+
+  /* ---------- Modal ---------- */
+  .modal-overlay{
+    position:fixed;inset:0;background:rgba(60,45,25,.45);
+    display:none;align-items:center;justify-content:center;z-index:50;padding:16px;
+  }
+  .modal-overlay.show{display:flex;}
+  .modal-box{
+    background:var(--panel);border-radius:22px;border:4px solid #fff;
+    box-shadow:0 10px 0 var(--shadow);padding:20px;max-width:480px;width:100%;
+    max-height:82vh;overflow-y:auto;
+  }
+  .modal-box h2{margin:0 0 4px;font-size:18px;color:var(--wood-d);}
+  .modal-box .mdesc{font-size:12px;color:#8a7a5f;margin-bottom:12px;line-height:1.6;}
+  .shop-row{
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+    background:#fffef9;border-radius:12px;padding:8px 12px;margin-bottom:8px;
+  }
+  .shop-row .sr-left{display:flex;align-items:center;gap:10px;}
+  .shop-row .sr-icon{font-size:22px;}
+  .shop-row .sr-name{font-size:13px;font-weight:700;}
+  .shop-row .sr-price{font-size:11.5px;color:#8a7a5f;}
+  .mini-btn{
+    font-family:'Zen Maru Gothic';font-weight:900;font-size:12px;
+    background:var(--accent-2);color:var(--wood-d);border:none;border-radius:999px;
+    padding:7px 14px;cursor:pointer;box-shadow:0 3px 0 #D9A63F;
+  }
+  .mini-btn:disabled{opacity:.35;cursor:default;}
+  .mini-btn.buy{background:#8FBF7F;color:#fff;box-shadow:0 3px 0 #5F9450;}
+
+  .dialogue-face{font-size:40px;text-align:center;margin-bottom:6px;}
+  .dialogue-name{text-align:center;font-weight:900;font-family:'Zen Maru Gothic';color:var(--wood-d);margin-bottom:8px;}
+  .dialogue-text{
+    background:#fffef9;border-radius:14px;padding:14px 16px;font-size:13.5px;line-height:1.8;
+    margin-bottom:12px;min-height:50px;
+  }
+
+  .fade-screen{
+    position:fixed;inset:0;background:#2b2038;color:#fff;display:none;
+    align-items:center;justify-content:center;flex-direction:column;z-index:80;
+    font-family:'Zen Maru Gothic';text-align:center;
+  }
+  .fade-screen.show{display:flex;}
+  .fade-screen .fs-big{font-size:22px;font-weight:900;margin-bottom:8px;}
+  .fade-screen .fs-sub{font-size:13px;color:#cfc3e0;}
+
+  .footer-note{font-size:11px;color:#8a9c78;text-align:center;margin-top:10px;line-height:1.8;}
+
+  /* ---------- Box art (production reveal) ---------- */
+  .boxart{
+    max-width:360px;margin:10px auto;padding:20px 18px;border-radius:20px;text-align:center;
+    background:linear-gradient(160deg, var(--genre-color, #8C54FF), #22163a 135%);
+    border:4px solid rgba(255,255,255,.35);
+    box-shadow:0 10px 0 rgba(0,0,0,.2);
+    position:relative; overflow:hidden;
+  }
+  .boxart-obi{
+    position:absolute; top:14px; right:-38px; width:150px; text-align:center;
+    background:#FF3B5C; color:#fff; font-family:'Zen Maru Gothic'; font-weight:900; font-size:11px;
+    padding:4px 0; transform:rotate(40deg); box-shadow:0 2px 4px rgba(0,0,0,.25); letter-spacing:1px;
+  }
+  .boxart-code{
+    position:absolute; top:8px; left:10px; font-size:9px; color:rgba(255,255,255,.55);
+    font-family:monospace; letter-spacing:.5px;
+  }
+  .boxart-emoji{font-size:38px;margin-bottom:6px;}
+  .boxart-title{font-family:'Zen Maru Gothic';font-weight:900;font-size:22px;color:#fff;text-shadow:2px 2px 0 rgba(0,0,0,.3);}
+  .boxart-tagline{font-size:13.5px;color:#FFE8B0;font-weight:700;margin-top:4px;}
+  .boxart-genre{font-size:13px;color:#F3E6FF;margin-top:4px;letter-spacing:1px;}
+  .boxart-stars{font-size:19px;color:#FFD23F;margin-top:8px;letter-spacing:2px;}
+  .boxart-scorerow{display:flex;align-items:center;justify-content:center;gap:12px;margin-top:8px;}
+  .critic-score{width:46px;height:46px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    font-family:'Zen Maru Gothic';font-weight:900;font-size:16px;color:#fff;border:2px solid rgba(255,255,255,.5);}
+  .critic-score.good{background:#2ED47A;}
+  .critic-score.mid{background:#F2B705;color:#4A3A2A;}
+  .critic-score.low{background:#FF3B5C;}
+  .boxart-reaction{font-size:13px;color:#F3E6FF;background:rgba(0,0,0,.2);padding:4px 10px;border-radius:999px;}
+  .boxart-cast{font-size:12.5px;color:#D8C6F2;margin-top:8px;}
+  .boxart-meta-grid{
+    display:flex; gap:8px; margin-top:8px; text-align:left;
+  }
+  .boxart-meta-grid > div{
+    flex:1; background:rgba(0,0,0,.16); border-radius:10px; padding:8px 10px;
+    font-size:12.5px; color:#F3E6FF; line-height:1.6;
+  }
+  .boxart-meta-grid span{color:#D8C6F2; font-size:11.5px;}
+
+  /* ---------- Song Composer ---------- */
+  .composer-row{display:flex;align-items:center;gap:2px;margin-bottom:2px;}
+  .composer-label{width:20px;font-size:10px;color:#8a7a5f;text-align:right;margin-right:4px;flex-shrink:0;}
+  .composer-cell{width:21px;height:21px;border-radius:4px;background:#EFE6D0;border:1px solid #ddcf9f;cursor:pointer;flex-shrink:0;padding:0;}
+  .composer-cell.active{background:var(--accent);border-color:var(--accent);}
+  .composer-cell.drum-cell.active{background:#5A6B8C;border-color:#5A6B8C;}
+  .composer-cell.playhead{box-shadow:0 0 0 2px #4A90D9 inset;}
+  .composer-controls{display:flex;gap:8px;align-items:center;margin:10px 0;flex-wrap:wrap;font-size:12px;}
+  .composer-controls select, .composer-controls input[type=range]{font-family:inherit;}
+  .song-row{display:flex;align-items:center;justify-content:space-between;gap:8px;background:#fffef9;border-radius:12px;padding:8px 12px;margin-bottom:8px;}
+
+  .gamble-box{display:flex;gap:12px;flex-wrap:wrap;margin-top:10px;}
+  .gamble-card{flex:1;min-width:200px;border-radius:16px;padding:14px;border:3px solid rgba(0,0,0,.08);}
+  .gamble-card.safe{background:rgba(111,182,217,.15);}
+  .gamble-card.risk{background:rgba(255,107,92,.15);}
+  .gamble-card h3{margin:0 0 6px;font-size:13.5px;color:var(--wood-d);}
+  .gamble-card p{font-size:11.5px;color:#8a7a5f;margin:0 0 10px;line-height:1.6;}
+  .result-banner{
+    display:inline-flex;align-items:center;gap:6px;font-family:'Zen Maru Gothic';font-weight:900;
+    font-size:12.5px;padding:5px 12px;border-radius:999px;margin:6px 0;
+  }
+  .result-banner.win{background:#2ED47A;color:#08381f;}
+  .result-banner.lose{background:#FF3B5C;color:#fff;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="title-row">
+    <div class="sub">🌿 SLOW LIFE VILLAGE GAME</div>
+    <h1>ほのぼの生活シム（仮）</h1>
+  </div>
+  <div id="app"></div>
+</div>
+
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal-box" id="modalBox"></div>
+</div>
+
+<div class="fade-screen" id="fadeScreen">
+  <div class="fs-big" id="fadeBig">おやすみなさい…</div>
+  <div class="fs-sub" id="fadeSub"></div>
+</div>
+
+<div id="devPanel" style="display:none;">
+  <div class="dev-title">🛠️ 開発者モード <span style="font-weight:400;">(半角 ` キーで開閉)</span></div>
+  <div class="dev-row">
+    <button class="dev-btn" id="devToNight">🌙 夜にする</button>
+    <button class="dev-btn" id="devToDay">☀️ 昼にする</button>
+  </div>
+  <div class="dev-row">
+    <button class="dev-btn" id="devToForest">🌲 森へワープ</button>
+    <button class="dev-btn" id="devToVillage">🏠 村へ戻る</button>
+  </div>
+  <div class="dev-title" style="margin-top:8px;">森の奥イベントを起こす</div>
+  <div class="dev-row"><button class="dev-btn" id="devEvFigure">白い子の気配</button></div>
+  <div class="dev-row"><button class="dev-btn" id="devEvSound">物音</button></div>
+  <div class="dev-row"><button class="dev-btn" id="devEvObject">忘れ物</button></div>
+  <div class="dev-row"><button class="dev-btn" id="devEvDisorient">違和感</button></div>
+  <div class="dev-row"><button class="dev-btn" id="devEvFlicker">灯りの異常</button></div>
+  <div class="dev-row"><button class="dev-btn" id="devEvVillager">村人の目撃（夜限定）</button></div>
+</div>
+
+
+<script>
+/* ============================================================
+   CONSTANTS & DATA
+   ============================================================ */
+const TILE = 32, COLS = 18, ROWS = 12;
+const SUNFLOWER_TILES = [[15,8],[16,8],[17,8],[15,9],[16,9],[17,9],[15,10],[16,10]];
+const CW = TILE*COLS, CH = TILE*ROWS;
+
+const AVATARS = ['😊','🐧','🌸','🍁','🌻','⛄','🎃','👻','🪆','🌝','🌚','🌛','🌞'];
+const PLAYER_COLORS = ['#FF7A5C','#FFB238','#3FBF6F','#3FA9E8','#B573F0','#FF5C9E'];
+
+const ITEMS = {
+  wood:   {name:'木の枝', icon:'🪵', sell:5,  cat:'material'},
+  apple:  {name:'りんご', icon:'🍎', sell:8,  cat:'material'},
+  chestnut:{name:'くり',  icon:'🌰', sell:6,  cat:'material'},
+  flower: {name:'はな',   icon:'🌸', sell:4,  cat:'material'},
+  fossil: {name:'化石',   icon:'🦴', sell:40, cat:'material'},
+  gem:    {name:'宝石',   icon:'💎', sell:60, cat:'material'},
+  bug_butterfly:{name:'ちょうちょ', icon:'🦋', sell:15, cat:'bug'},
+  bug_ladybug:  {name:'てんとう虫', icon:'🐞', sell:10, cat:'bug'},
+  bug_bee:      {name:'はち',      icon:'🐝', sell:12, cat:'bug'},
+  fish_carp:  {name:'ふな',      icon:'🐟', sell:20, cat:'fish'},
+  fish_trop:  {name:'ねったいぎょ',icon:'🐠', sell:45, cat:'fish'},
+  fish_shrimp:{name:'えび',      icon:'🦐', sell:15, cat:'fish'},
+  fish_junk:  {name:'古靴',      icon:'👢', sell:1,  cat:'fish'},
+  mushroom:  {name:'森のキノコ', icon:'🍄', sell:18, cat:'material'},
+  glowstone: {name:'輝石',      icon:'💠', sell:55, cat:'material'},
+  ancient_wood:{name:'大樹のかけら', icon:'🪵', sell:35, cat:'material'},
+  note_page: {name:'白いノートの切れ端', icon:'📄', sell:2, cat:'lore'},
+  odd_item: {name:'誰かの忘れ物', icon:'🎐', sell:1, cat:'lore'},
+  ancient_relic: {name:'最奥のかけら', icon:'🌌', sell:0, cat:'lore'},
+  // furniture / placeables
+  f_bench:   {name:'手作りベンチ',   icon:'🪑', cat:'furniture'},
+  f_lamp:    {name:'どんぐりランプ', icon:'🏮', cat:'furniture'},
+  f_flowerpot:{name:'はなかざり',   icon:'💐', cat:'furniture'},
+  f_monument:{name:'なぞのモニュメント', icon:'🗿', cat:'furniture'},
+  f_glowlamp:{name:'輝石の行灯', icon:'🏮', cat:'furniture'},
+  f_bookshelf:{name:'本棚', icon:'📚', cat:'furniture', buy:120},
+  f_painting:{name:'絵画',  icon:'🖼️', cat:'furniture', buy:90},
+  f_clock:   {name:'時計',  icon:'🕰️', cat:'furniture', buy:150},
+  f_plant:   {name:'観葉植物', icon:'🪴', cat:'furniture', buy:60},
+  f_sofa:    {name:'ソファ', icon:'🛋️', cat:'furniture', buy:200},
+  f_whitebranch:{name:'白い大樹の枝細工', icon:'🕯️', cat:'furniture'},
+  f_lostcharm:{name:'忘れ物のお守り', icon:'🎐', cat:'furniture'},
+  f_chandelier:{name:'シャンデリア', icon:'💡', cat:'furniture', buy:350},
+  f_globe:{name:'地球儀', icon:'🌐', cat:'furniture', buy:280},
+  f_deepshrine:{name:'森の最奥のほこら', icon:'⛩️', cat:'furniture'},
+};
+
+const RECIPES = [
+  {id:'f_bench', need:{wood:3, flower:1}, flavor:'木の枝と花びらを組み合わせた、素朴なあたたかみのある一脚。'},
+  {id:'f_lamp', need:{chestnut:3, wood:1}, flavor:'くりの殻がほんのり灯りを透かす、手作りのやさしい明かり。'},
+  {id:'f_flowerpot', need:{flower:3}, flavor:'摘みたての花をぎゅっと束ねた、季節を閉じ込めた一輪。'},
+  {id:'f_monument', need:{fossil:1, gem:1}, flavor:'化石と宝石を組み合わせた、由来不明だが妙に存在感のあるオブジェ。'},
+  {id:'f_glowlamp', need:{glowstone:1, mushroom:2}, flavor:'森で見つけた輝石が、夜にほんのり青白く灯る特別な行灯。'},
+  {id:'f_whitebranch', need:{ancient_wood:2, note_page:1}, flavor:'森の奥で拾った欠片と、白いノートの切れ端をひとつに。何かの供物のような、それでいて静かに美しい置物になった。'},
+  {id:'f_lostcharm', need:{odd_item:3}, flavor:'誰のものか分からない忘れ物を三つ集めると、なぜかお守りのような形になった。'},
+  {id:'f_deepshrine', need:{ancient_relic:1}, flavor:'森の一番奥で見つけたかけらを、そっと形にした祈りのほこら。何を祈っているのかは、自分でもよく分からない。'},
+];
+
+const SHOP_STOCK = ['f_bookshelf','f_painting','f_clock','f_plant','f_sofa','f_chandelier','f_globe'];
+const SHOP_UNLOCKS = { f_clock:8, f_sofa:15, f_chandelier:22, f_globe:30 };
+
+/* ---------- 森の奥：気配イベント用テキスト（正体は説明しない） ---------- */
+const PALE_LINES = [
+  '……木々の隙間に、白いものが立っていた気がした。',
+  'ふり返っても、誰もいない。でも、さっきまで何かがいた。',
+  '足音がやんだ。自分の足音まで。',
+  '白いワンピースの裾のようなものが、木の陰に消えた。',
+  '子どもの笑い声が、遠くでも近くでもない場所から聞こえた。',
+  '灯りが一瞬、白く強くなった。理由はわからない。',
+  '誰かに見られている。姿は、どこにもないのに。',
+];
+const FOREST_SOUND_LINES = [
+  'どこかで、誰かが数を数える声がした。',
+  '自分のものではない足音が、少しの間だけ後ろをついてきた。',
+  '鼻歌のような音が聞こえた。知らない曲だった。',
+  '木々の向こうで、何かがひそひそと話している。内容までは聞き取れない。',
+  '遠くで扉が閉まる音がした。この森に、扉などないのに。',
+  '耳のすぐ後ろで、小さく息を吸う音がした。',
+];
+const FOREST_DISORIENT_LINES = [
+  'さっきも同じ木を見た気がする。気のせいだろうか。',
+  '来た道のはずなのに、少しだけ景色が違う。',
+  '自分の足あとが、二人分あるように見えた。',
+  '気づけば、思っていたよりずっと長く歩いていた気がする。',
+  '一瞬、自分がどちらを向いていたか分からなくなった。',
+];
+const FOREST_FLICKER_LINES = [
+  '灯りが、一瞬だけ白く染まった。',
+  '灯りの色が、ほんの少しだけ違って見えた。',
+  '灯りが、誰かに覗き込まれているみたいに揺れた。',
+];
+const ODD_OBJECT_LINES = [
+  'なぜか、小さな白い靴が片方だけ落ちていた。誰のものかは分からない。',
+  'リボンのようなものが、木の枝に結ばれていた。まだ真新しい。',
+  '名前の書かれていない写真が、地面に落ちていた。誰も写っていない。',
+  '白い糸が、木々の間にずっと張られていた。どこまで続いているかは見えない。',
+  '丸い鈴のようなものが、音もなく落ちていた。振っても音がしない。',
+  '小さな落とし物係のカードが落ちていた。連絡先の欄は空白だった。',
+];
+const NOTE_FRAGMENTS = [
+  '「白い子は、森の奥じゃなくて、もっと下にいるの。」',
+  '「白い子と遊ぶと、時間が止まるの。誰にも言っちゃだめだよ。」',
+  '「この村の下には、古い“白の儀式”があったらしい。資料は、なぜか全部欠けている。」',
+  '「白い子は、あなたの後ろにもいるよ。」',
+  '「ノートを読むたび、部屋の光が少しずつ白くなる気がする。」',
+  '「森の奥に行ってはいけない、と誰も言わない。誰も、行くと言わないだけ。」',
+];
+const FOREST_VILLAGER_LINES = [
+  '……うん、それでいいよ。',
+  '……わかった。また今度、続き聞かせて。',
+  '……そんなに笑わないでよ。',
+  '……え、今のところ、もう一回言って？',
+  '……うん、うん。知ってる、それ。',
+  '……じゃあ、また同じ時間に。',
+];
+const FOREST_VILLAGER_VANISH_LINES = [
+  '近づくと、いつの間にか誰もいなくなっていた。',
+  '目をこすった瞬間、姿が消えていた。',
+  '足を止めると、話し声も気配も消えていた。',
+];
+
+function getItemDef(id){
+  return ITEMS[id] || (G && G.workDefs && G.workDefs[id]);
+}
+
+/* ---------- PROJECT PRODUCER統合：作品生成データ ---------- */
+const PROJECTS_BASE = [
+  {name:'RPG',        emoji:'⚔️', color:'#8C54FF', tech:15, idea:11, coop:7, desc:'総合力が問われるオールラウンド企画'},
+  {name:'ホラー',      emoji:'👻', color:'#FF3B5C', tech:7, idea:15, coop:4, desc:'発想力で恐怖演出を作り込む'},
+  {name:'恋愛',        emoji:'💕', color:'#FF4D8D', tech:4, idea:13, coop:13, desc:'協調性が高いチームほど化学反応が起きる'},
+  {name:'SF',         emoji:'🚀', color:'#20E0C8', tech:13, idea:13, coop:4, desc:'技術と発想のバランス型・難易度高め'},
+  {name:'パズル',      emoji:'🧩', color:'#FFD23F', tech:18, idea:7, coop:2, desc:'技術特化。少人数でも狙いやすい'},
+  {name:'ノベル',      emoji:'📖', color:'#B6E84B', tech:2, idea:18, coop:9, desc:'発想力が突出したチーム向け'},
+  {name:'アクション',   emoji:'⚡', color:'#FF5C4D', tech:13, idea:9, coop:4, desc:'スピード感が命、直感で魅せる爽快派'},
+  {name:'ミステリー',   emoji:'🔍', color:'#4D79FF', tech:9, idea:15, coop:7, desc:'伏線と推理の緻密さで魅せる本格派'},
+  {name:'音楽ゲーム',   emoji:'🎧', color:'#FF4DE1', tech:11, idea:11, coop:11, desc:'リズムと演出、みんなの息が合ってこそ'},
+  {name:'スポーツ',     emoji:'🏀', color:'#4DD9FF', tech:15, idea:4, coop:9, desc:'手触りの良さと熱いチーム対戦が魅力'},
+  {name:'ファンタジー', emoji:'🧚', color:'#B15CFF', tech:7, idea:18, coop:7, desc:'壮大な世界観と想像力がすべての鍵'},
+  {name:'コメディ',     emoji:'🤣', color:'#FFB84D', tech:4, idea:15, coop:11, desc:'笑いのセンスとチームの掛け合いが命'},
+];
+
+const GENRE_WORDS = {
+  'RPG':        {adj:['伝説の','終焉の','蒼き','黄金の','忘却の','継ぎ接ぎの'], noun:['勇者伝','継承者','聖剣記','王国戦記','約束の地','最後の戦士']},
+  'ホラー':      {adj:['深夜の','血塗られた','囁く','呪われた','消えない','誰もいない'], noun:['廃校舎','人形館','悪夢','儀式','来訪者','屋根裏']},
+  '恋愛':        {adj:['きみと見る','放課後の','淡い','届かない','季節外れの','忘れられない'], noun:['約束','恋文','花火','ひととき','君の名前','初恋']},
+  'SF':         {adj:['星間の','量子の','最後の','無重力の','人工の','終わらない'], noun:['方舟','記憶','進化論','特異点','楽園','起動信号']},
+  'パズル':      {adj:['からくり','無限','虹色の','ふしぎな','くるくる','逆さまの'], noun:['迷宮','パズル島','歯車の街','積み木','回廊','箱庭']},
+  'ノベル':      {adj:['ある日の','静かな','誰も知らない','雨上がりの','記憶の中の','名もなき'], noun:['手紙','図書室','物語のかけら','余白','日々','栞']},
+  'アクション':   {adj:['疾走する','爆走','漆黒の','無敵の','鋼鉄の','刹那の'], noun:['特攻隊','狩人','最終決戦','衝動','覚醒','限界線']},
+  'ミステリー':   {adj:['消えた','偽りの','霧の中の','未解決の','静寂の','伏せられた'], noun:['真実','容疑者','事件簿','密室','手がかり','告白']},
+  '音楽ゲーム':   {adj:['奏でる','鳴り止まない','七色の','夜明けの','とどかない','重なり合う'], noun:['旋律','リズム','コンサート','音色','ハーモニー','拍手']},
+  'スポーツ':    {adj:['熱き','汗と涙の','限界突破の','逆転の','伝説になる','声援の'], noun:['青春','試合','夏','ライバル','絆','最終回']},
+  'ファンタジー': {adj:['異世界の','精霊の','空に浮かぶ','古の','光り輝く','失われた'], noun:['王国','旅人','秘境','約束の書','大陸','花園']},
+  'コメディ':    {adj:['ドタバタ','抱腹絶倒の','ゆかいな','まさかの','笑いが止まらない','てんやわんやの'], noun:['日常','珍騒動','部活','同居人','文化祭','放課後']},
+};
+
+const TAGLINES = {
+  'RPG':        ['何度でも、剣を取れ。','世界の果てで待っている。','伝説は、ここから始まる。'],
+  'ホラー':      ['もう、後ろは見ないで。','逃げても、聞こえてくる。','眠れない夜への招待状。'],
+  '恋愛':        ['この夏だけの、ふたり。','答えは、まだ言えない。','君の隣に、いたいから。'],
+  'SF':         ['未来は、まだ書き換えられる。','星の数だけ、可能性がある。','境界線の、その先へ。'],
+  'パズル':      ['解けない謎なんて、ない。','あと一手で、世界が変わる。','頭を抱えて、笑い出す。'],
+  'ノベル':      ['言葉にできなかった、あの日。','読み終えたら、電話したくなる。','余白にも、物語がある。'],
+  'アクション':   ['止まったら、終わりだ。','限界を超えろ。','拳が、すべてを語る。'],
+  'ミステリー':   ['真実は、いつも一つとは限らない。','謎を解く鍵は、あなたの中に。','最後のページで、鳥肌が立つ。'],
+  '音楽ゲーム':   ['音が、心をつなぐ。','リズムに、すべてを込めて。','鳴り止まない、この一曲。'],
+  'スポーツ':    ['全力は、裏切らない。','汗の数だけ、強くなる。','最後まで、あきらめない。'],
+  'ファンタジー': ['扉の向こうに、世界が待つ。','小さな勇気が、伝説になる。','空の果てまで、飛んでいこう。'],
+  'コメディ':    ['笑いすぎ注意。','真剣にふざけてます。','今日も、平和に賑やか。'],
+};
+
+const SYNOPSIS_PARTS = {
+  'RPG': {
+    protagonist:['記憶を失った剣士','引退したはずの元勇者','村を追放された少年','しゃべる剣を拾った青年'],
+    incident:['王城の地下で封印が解けてしまい','幼なじみが魔王軍にスカウトされ','世界樹が急に枯れ始め','勇者パーティのオーディションに紛れ込み'],
+    twist:['実は魔王の方が話が通じるいい人だった','パーティメンバー全員がラスボスの親戚だった','セーブポイントが有料だと後で知った','最強の武器が実は湯たんぽだった'],
+    quirk:['戦闘中もやたら経済の話をするNPCがいる','ラスボス城にだけWi-Fiが通っている','どのセリフにも妙に長い間がある','宿屋の主人だけ妙に事情通']},
+  'ホラー': {
+    protagonist:['引っ越してきたばかりの家族','肝試しに来た大学生4人組','夜勤明けの警備員','廃校マニアのユーチューバー'],
+    incident:['地下室から聞こえるはずのない足音がして','壁の中から人形が出てきて','鏡に自分じゃない誰かが映り始め','携帯に知らない番号から着信が鳴り続け'],
+    twist:['幽霊の方が家賃の心配をしていた','呪いの正体は隣人の生活音だった','脅かしてきた霊が実は道に迷っていた','ホラーのはずが途中から片付けの話になった'],
+    quirk:['悲鳴のBGMがやたら陽気','逃げ道が毎回同じ倉庫に繋がる','敵キャラのモノローグが長すぎる','懐中電灯の電池だけは妙に長持ちする']},
+  '恋愛': {
+    protagonist:['クラス委員のふたり','幼なじみと転校生','文化祭実行委員の先輩後輩','屋上でお弁当を食べる二人'],
+    incident:['傘を忘れた日に相合傘になり','うっかり告白の手紙を渡す相手を間違え','文化祭の出し物でカップル役をやることになり','夏祭りではぐれて二人きりになり'],
+    twist:['実は両想いだと周り全員が知っていた','ライバル役が途中から応援に回った','告白の返事がLINEの既読無視だった(その後普通に両想い)','恋のライバルが実は保護者だった'],
+    quirk:['毎回同じ自販機の前で偶然会う','BGMが急にバラードになる場面が多すぎる','脇役の片思いの方が本編より切ない','放課後の教室がやたら茜色']},
+  'SF': {
+    protagonist:['記憶バックアップ担当の整備士','クローンだと知らなかった主人公','旧型ロボットの営業マン','時間跳躍に失敗し続ける研究員'],
+    incident:['人工知能が突然、有給休暇を要求しはじめ','惑星の軌道計算に1桁のミスが見つかり','タイムマシンの試作機が勝手に起動し','記憶データの一部が誰かに閲覧されていて'],
+    twist:['宇宙人の目的はただの町内会だった','未来の自分がやたら説教くさかった','敵の母艦の中身がほぼ書類仕事だった','タイムパラドックスの原因が飲み忘れた薬だった'],
+    quirk:['どんな超技術も結局説明書が分厚い','未来なのにFAXが現役','宇宙船の警告音が毎回のんびりしている','AIがやたら敬語にこだわる']},
+  'パズル': {
+    protagonist:['からくり屋敷の見習い','記憶喪失の宝石泥棒','鍵開け好きの図書館司書','積み木職人の弟子'],
+    incident:['最後のピースだけが世界中から集まらず','扉という扉に謎の暗号が刻まれ始め','時計塔の針が全部バラバラに動き出し','街の色がパズルのように入れ替わり始め'],
+    twist:['最終問題の答えが「諦めないこと」で拍子抜けした','ラスボスは実はただのクイズ好き','からくりの目的が単なる整理整頓だった','正解ルートが最初からずっと目の前にあった'],
+    quirk:['ヒントを出すキャラがやたら意地悪','正解した瞬間だけBGMが妙に安っぽい','詰みかけると必ず誰かが助言してくる','扉の数だけ無駄に多い']},
+  'ノベル': {
+    protagonist:['引っ越し前の最後の夏を過ごす少女','古い手紙を見つけた図書委員','祖母の日記を読み解く青年','転校の理由を誰にも言えない少年'],
+    incident:['押し入れから昔の交換日記が出てきて','誰も座らない放課後の教室に忍び込み','旅先で偶然、名前も知らない誰かと文通が始まり','引っ越しの荷物整理中に思い出の品を見つけ'],
+    twist:['最後の1行だけ、ずっと言えなかった本音だった','手紙の相手は実はもう卒業していた先輩だった','日記の最後のページは白紙のままだった','答え合わせの日は、結局来なかった'],
+    quirk:['ページの端にだけ落書きが増えていく','会話文より風景描写の方が長い','タイトル回収が最終ページの最後の一文','章の変わり目にだけ天気の話が挟まる']},
+  'アクション': {
+    protagonist:['元傭兵の便利屋','新米刑事とベテラン相棒','荷物運びのはずだった配達員','格闘技をやめたはずの主人公'],
+    incident:['依頼された荷物の中身が実は爆弾だとわかり','追っていた犯人が実は依頼人の身内だと発覚し','ビルの屋上で待ち伏せに気づき','たった一晩で街の半分が封鎖されて'],
+    twist:['黒幕は序盤で名刺を渡してきた人だった','最強の敵はラスト5分で急に丁寧語になった','爆弾のタイマーが実は目覚まし時計だった','カーチェイスの目的地がスーパーの特売だった'],
+    quirk:['爆発シーンだけ妙にスローモーション','敵の台詞が長すぎて先に夜が明ける','主人公だけ毎回ジャケットを着替えない','カーチェイス中も渋滞は普通に守る']},
+  'ミステリー': {
+    protagonist:['地方新聞の記者','引退した名探偵の弟子','密室マニアの大学生','証拠品にやたら詳しい鑑識官'],
+    incident:['密室のはずの部屋から証拠が消えていて','容疑者全員のアリバイが完璧すぎて','事件現場に毎回同じ香水の匂いが残っていて','被害者から届いた手紙の消印が、事件後の日付になっていて'],
+    twist:['犯人は最初のページに名前だけ出ていた','密室の作り方が普通に合鍵だった','動機が「単に眠れなかったから」だった','探偵自身が一番怪しい行動をしていた'],
+    quirk:['聞き込みのたびに誰かがお茶を出してくる','証拠品の説明がやたら丁寧','犯人が動機を語る時だけ照明が暗くなる','助手のメモがいつも字が汚い']},
+  '音楽ゲーム': {
+    protagonist:['元天才ピアニストの高校生','路上ライブ常連の大学生バンド','聴覚に自信のない作曲志望者','引退したアイドルの付き人'],
+    incident:['廃部寸前の軽音部に入部することになり','コンテスト直前にボーカルが失踪し','街の雑音がすべて音楽に聞こえ始め','伝説のギターを拾ってしまい'],
+    twist:['優勝より打ち上げの方が盛り上がった','ライバルバンドが実は同じ高校の別クラスだった','伝説のギターの弦は実は1本足りなかった','審査員が全員、身内だった'],
+    quirk:['本番前のチューニングがやたら長い','MCがどのライブでも同じ小ネタ','スタジオ代の話が地味にリアル','ドラムのタイミングだけ毎回怪しい']},
+  'スポーツ': {
+    protagonist:['補欠だった万年二軍選手','引退試合を控えたベテラン','経験ゼロのマネージャー','ライバル校からの転校生'],
+    incident:['廃部寸前の部活にまさかの助っ人が現れ','決勝リーグ直前にキャプテンが怪我をして','雨で中止続きだった大会がまさかの決勝進出を果たし','初心者ばかりのチームで県大会に出ることになり'],
+    twist:['最後の一点は相手のオウンゴールだった','優勝より部員が増えたことの方が嬉しかった','ライバルとの決着は結局、次回作に持ち越された','伝説の必殺技の成功率は実は五分五分だった'],
+    quirk:['試合前の円陣がやたら長い','実況が途中から解説を忘れて感想しか言わない','ユニフォームの洗濯係が地味に主役級','ベンチの弁当の話が毎回挟まる']},
+  'ファンタジー': {
+    protagonist:['落ちこぼれ魔法学校生','記憶のない旅の吟遊詩人','竜に育てられた人間の子','王国から逃げてきた見習い錬金術師'],
+    incident:['禁書庫の扉がひとりでに開いてしまい','空から降ってきた見知らぬ少女を拾い','森の奥の泉が突然しゃべり出し','失われた古代語の呪文書を拾ってしまい'],
+    twist:['伝説の魔王は実は寂しがり屋だった','古代の呪いの正体は単なる誤訳だった','最強の魔法が実は「ありがとう」の一言だった','竜の弱点はくすぐったがりなことだった'],
+    quirk:['魔法陣を描くのに毎回時間がかかりすぎる','精霊が地味に世間話好き','城の食堂事情がやたら細かく描かれる','杖の手入れの描写だけ妙に長い']},
+  'コメディ': {
+    protagonist:['やる気ゼロの生徒会長','おっちょこちょいな新人店員','空回り気味の実況アナウンサー','妙に本気なモノマネ芸人'],
+    incident:['学園祭の出し物がなぜか国際問題になりかけ','バイト先の店長が突然失踪し','家族全員が入れ替わってしまい','誰も予約していないのに予約席が満席になっていて'],
+    twist:['大騒動の原因は単なる勘違いだった','犯人はまさかの主人公自身だった','解決したと思ったら振り出しに戻った','全部、夢オチにすると見せかけて現実だった'],
+    quirk:['ツッコミ役が途中から諦め始める','BGMがずっとコミカル','どんな修羅場も最終的にご飯の話になる','ナレーションが毎回ひとこと多い']},
+};
+
+const QUALITY_LINES = {
+  high:['気づけば続編の企画会議が始まっていた。','発売直後にファンアートが投稿されるほどの反響。','スタッフロールで思わず拍手が起きた。'],
+  mid: ['良くも悪くも、印象には残る一本。','次はもっとやれる、そんな手応えが残った。','粗はあるが、愛される要素は詰まっていた。'],
+  low: ['セールスは伸びなかったが、カルト的な人気を得た。','なぜか妙に記憶に残る、そんな迷作。','「あれはあれで良かった」と数年後に語られた。'],
+};
+
+const QUOTES_TECH = ['圧倒的な技術力に驚かされる仕上がり。','細部までこだわり抜かれた完成度。','技術屋魂が詰まった意欲作。'];
+
+const QUOTES_IDEA = ['誰も見たことのない発想が光る。','奇想天外なアイデアに脱帽。','独創性の塊のような一作。'];
+
+const QUOTES_COOP = ['チームの温かさが画面から伝わる。','息の合ったチームワークが随所に。','愛情深く作り込まれた一作。'];
+
+const QUOTES_FLOP = ['粗削りだが勢いだけはある。','荒削りな仕上がりに賛否両論。','次回作に期待、という声も。'];
+
+const QUOTES_MASTER = ['文句なしの完成度、殿堂入り確実。','業界内でも話題騒然の傑作。','これぞ集大成、と言うべき一本。'];
+
+const REACTIONS_HIGH = ['神ゲー確定。','気づいたら朝だった。','友達全員に勧めた。','発売日に握手会するべき。','続編を今すぐ出して。'];
+const REACTIONS_MID  = ['なかなか面白かった。','人には勧めたい出来。','次回作にも期待。','悪くない、むしろ好き。'];
+const REACTIONS_LOW  = ['惜しい…続編に期待。','クセが強いけど嫌いじゃない。','人を選ぶかも。','荒削りだけど熱意は感じた。'];
+const HYPE_HIGH = ['殿堂入り','話題沸騰中','年間ベスト級','伝説の一本'];
+const HYPE_LOW  = ['隠れた迷作','マニア向け注意','カルト的人気(？)'];
+
+const VILLAGER_FLAVOR_LINES = {
+  'のんびり':  ['現場はいつも、あくびから始まった。','急がば回れ、が合言葉だった。'],
+  'げんき':    ['気づけば誰よりも先に動き出していた。','元気だけはトレードマークだった。'],
+  'いたずら':  ['サプライズ演出だけは無駄に凝っていた。','ちょっとしたイタズラが仕込まれていた。'],
+  'マイペース':['締切の概念が、たまに消える。','昼寝から戻ってくると、なぜか完成していた。'],
+  'きれい好き':['整理整頓だけは誰にも負けなかった。','細部のホコリ一つも見逃さなかった。'],
+};
+
+const PRODUCTION_STYLES = [
+  {id:'mainstream', name:'王道演出', emoji:'🎯', desc:'幅広い層に届く、まとまりの良い王道の見せ方。売上は伸びるが批評は手堅め。', salesMul:1.25, critMul:0.85},
+  {id:'arthouse',   name:'アート系演出', emoji:'🎭', desc:'尖った表現で批評家に刺さる作家性の強い演出。売上は控えめ。', salesMul:0.8, critMul:1.3},
+  {id:'comedic',    name:'コメディ演出', emoji:'😂', desc:'笑いを散りばめた親しみやすい演出。村人の反応がやわらかくなる。', salesMul:1.0, critMul:1.0, softenReaction:true},
+  {id:'hardcore',   name:'ハードコア演出', emoji:'🔥', desc:'硬派でマニア向け。当たり外れが大きいがハマれば強烈。', salesMul:0.85, critMul:1.1, highVariance:true},
+];
+const FOCUS_POINT_COST = 8;
+const FOCUS_MAX = 6;
+const GAMBLE_WIN_CHANCE = 0.45;
+const VILLAGER_STAT_CAP = 6; // 贈り物＋制作経験で伸ばせる能力ボーナスの上限（旧:3）
+const STREAK_BONUS_CAP = 3; // 同じジャンルを連続でつくったときの最大ボーナス
+const TREND_STAT_DISCOUNT = 2; // 流行ジャンルは必要能力がこの分だけ下がる
+const TREND_SALES_MUL = 1.3; // 流行ジャンルの売上倍率
+
+// 相性コンビ：特定の性格の組み合わせがスタジオにいると能力にボーナスが乗る
+const SYNERGY_PAIRS = [
+  {a:'のんびり', b:'マイペース', stat:'coop', bonus:2, label:'まったりコンビ'},
+  {a:'げんき',   b:'いたずら',   stat:'tech', bonus:2, label:'元気コンビ'},
+  {a:'きれい好き',b:'のんびり',  stat:'idea', bonus:2, label:'相性◎コンビ'},
+  {a:'げんき',   b:'きれい好き', stat:'coop', bonus:2, label:'バランスコンビ'},
+];
+function detectSynergies(squad){
+  const personalities = squad.map(m=>m.personality);
+  return SYNERGY_PAIRS.filter(sp=>personalities.includes(sp.a) && personalities.includes(sp.b));
+}
+function pickNewTrend(prevName){
+  const names = PROJECTS_BASE.map(p=>p.name).filter(n=>n!==prevName);
+  return randPick(names.length ? names : PROJECTS_BASE.map(p=>p.name));
+}
+
+function randPick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+
+function pickNUnique(arr, n){
+  const pool = [...arr];
+  const out = [];
+  while(pool.length && out.length<n){
+    const i = Math.floor(Math.random()*pool.length);
+    out.push(pool.splice(i,1)[0]);
+  }
+  return out;
+}
+
+function computeStudioStats(squad){
+  const bonus = (id, stat)=> (G.villagerStatBonus && G.villagerStatBonus[id] && G.villagerStatBonus[id][stat]) || 0;
+  let techSum = squad.reduce((a,c)=>a+c.tech+bonus(c.id,'tech'),0);
+  let ideaSum = squad.reduce((a,c)=>a+c.idea+bonus(c.id,'idea'),0);
+  let coopSum = squad.reduce((a,c)=>a+c.coop+bonus(c.id,'coop'),0);
+  const synergies = detectSynergies(squad);
+  synergies.forEach(sp=>{
+    if(sp.stat==='tech') techSum += sp.bonus;
+    else if(sp.stat==='idea') ideaSum += sp.bonus;
+    else coopSum += sp.bonus;
+  });
+  return {techSum, ideaSum, coopSum, synergies};
+}
+
+function generateTitleCandidates(genreName, n){
+  const words = GENRE_WORDS[genreName] || GENRE_WORDS['ノベル'];
+  const taglineBank = TAGLINES[genreName] || TAGLINES['ノベル'];
+  const taglinePool = pickNUnique(taglineBank, n);
+  const seen = new Set();
+  const out = [];
+  let tries = 0;
+  while(out.length<n && tries<40){
+    tries++;
+    const title = randPick(words.adj) + randPick(words.noun);
+    if(seen.has(title)) continue;
+    seen.add(title);
+    out.push({title, tagline: taglinePool[out.length % taglinePool.length]});
+  }
+  return out;
+}
+
+function generateQuirkCandidates(genreName, n){
+  const parts = SYNOPSIS_PARTS[genreName] || SYNOPSIS_PARTS['ノベル'];
+  return pickNUnique(parts.quirk, n);
+}
+
+function buildVillageSynopsis(genreName, squad, stars, quirkOverride){
+  const parts = SYNOPSIS_PARTS[genreName] || SYNOPSIS_PARTS['ノベル'];
+  const protagonist = randPick(parts.protagonist);
+  const incident = randPick(parts.incident);
+  const twist = randPick(parts.twist);
+  const quirk = quirkOverride || randPick(parts.quirk);
+
+  let flavorLine = '';
+  if(squad.length){
+    const member = squad[Math.floor(Math.random()*squad.length)];
+    const bank = VILLAGER_FLAVOR_LINES[member.personality];
+    if(bank) flavorLine = randPick(bank);
+  }
+  const qualityBank = stars>=5 ? QUALITY_LINES.high : stars<=2 ? QUALITY_LINES.low : QUALITY_LINES.mid;
+  const qualityLine = randPick(qualityBank);
+
+  const QUIRK_LINKS = ['そのうえ、', 'しかも、', 'おまけに、', '気づけば、'];
+  const FLAVOR_LINKS = ['制作の裏側では、', '撮影の合間には、', '現場を振り返ると、', 'スタッフいわく、'];
+  const QUALITY_LINKS = ['そんな一作は、', '仕上がってみれば、', '蓋を開けてみると、'];
+
+  const sentences = [
+    `主人公は${protagonist}。`,
+    `${incident}…そのはずが、${twist}。`,
+    `${randPick(QUIRK_LINKS)}${quirk}。`,
+  ];
+  if(flavorLine) sentences.push(`${randPick(FLAVOR_LINKS)}${flavorLine}`);
+  sentences.push(`${randPick(QUALITY_LINKS)}${qualityLine}`);
+
+  return sentences.join('');
+}
+
+function generateVillageWork(project, squad, opts){
+  opts = opts || {};
+  const style = opts.style || PRODUCTION_STYLES[0];
+  const focus = opts.focusAlloc || {tech:0, idea:0, coop:0};
+
+  let {techSum, ideaSum, coopSum, synergies} = computeStudioStats(squad);
+  techSum += focus.tech||0; ideaSum += focus.idea||0; coopSum += focus.coop||0;
+
+  const streakBonus = opts.streakBonus||0;
+  if(streakBonus){ techSum += streakBonus; ideaSum += streakBonus; coopSum += streakBonus; }
+
+  const discount = opts.isTrend ? TREND_STAT_DISCOUNT : 0;
+  const techMet = techSum>=Math.max(1,project.tech-discount),
+        ideaMet = ideaSum>=Math.max(1,project.idea-discount),
+        coopMet = coopSum>=Math.max(1,project.coop-discount);
+  const metCount = [techMet, ideaMet, coopMet].filter(Boolean).length;
+  let stars = metCount===3?5 : metCount===2?4 : metCount===1?3 : 2;
+
+  if(style.highVariance){
+    const roll = Math.random();
+    if(roll<0.25) stars = 5;
+    else if(roll<0.5) stars = Math.max(1, stars-2);
+  }
+
+  let gambleResult = null;
+  if(opts.gamble){
+    const won = Math.random() < GAMBLE_WIN_CHANCE;
+    gambleResult = won ? 'win' : 'lose';
+    stars = won ? Math.min(5, stars+1) : Math.max(1, stars-1);
+  }
+
+  const title = opts.titleChoice ? opts.titleChoice.title : (randPick(GENRE_WORDS[project.name]||GENRE_WORDS['ノベル'].adj)+randPick((GENRE_WORDS[project.name]||GENRE_WORDS['ノベル']).noun));
+  const tagline = opts.titleChoice ? opts.titleChoice.tagline : randPick(TAGLINES[project.name]||TAGLINES['ノベル']);
+
+  let criticScore = stars*17 + Math.floor(Math.random()*10)-4;
+  criticScore = Math.round(criticScore * (style.critMul||1));
+  if(gambleResult==='win') criticScore += 8;
+  if(gambleResult==='lose') criticScore -= 10;
+  criticScore = Math.max(30, Math.min(99, criticScore));
+
+  let quoteBank;
+  if(stars>=5) quoteBank = QUOTES_MASTER;
+  else if(stars<=2) quoteBank = QUOTES_FLOP;
+  else {
+    const techRatio = project.tech ? (techSum-project.tech)/project.tech : 0;
+    const ideaRatio = project.idea ? (ideaSum-project.idea)/project.idea : 0;
+    const coopRatio = project.coop ? (coopSum-project.coop)/project.coop : 0;
+    if(techRatio>=ideaRatio && techRatio>=coopRatio) quoteBank = QUOTES_TECH;
+    else if(ideaRatio>=techRatio && ideaRatio>=coopRatio) quoteBank = QUOTES_IDEA;
+    else quoteBank = QUOTES_COOP;
+  }
+  const quote = randPick(quoteBank);
+
+  let reactionTier = stars>=5 ? 'high' : stars<=2 ? 'low' : 'mid';
+  if(style.softenReaction && reactionTier==='low') reactionTier = 'mid';
+  const reactionBank = reactionTier==='high'?REACTIONS_HIGH : reactionTier==='low'?REACTIONS_LOW : REACTIONS_MID;
+  const reaction = randPick(reactionBank);
+
+  const synopsis = buildVillageSynopsis(project.name, squad, stars, opts.quirkChoice);
+  const roleEmojis = [...new Set(squad.map(c=>c.roleEmoji))];
+  const emojiCombo = [project.emoji, ...roleEmojis].slice(0,4).join(' ');
+
+  let sales = stars*22 + Math.floor(Math.random()*10);
+  sales = Math.round(sales * (style.salesMul||1));
+  if(opts.isTrend) sales = Math.round(sales * TREND_SALES_MUL);
+  if(gambleResult==='win') sales = Math.round(sales*1.6);
+  if(gambleResult==='lose') sales = Math.round(sales*0.5);
+  sales = Math.max(8, sales);
+
+  const words2 = GENRE_WORDS[project.name] || GENRE_WORDS['ノベル'];
+  const themeSong = randPick(words2.adj) + randPick(words2.noun);
+  const singer = squad.find(c=>c.role==='声優') || squad.find(c=>c.role==='作曲家');
+  const songCredit = singer ? `歌：${singer.name}` : `${project.name}スタジオ・サウンドチーム`;
+
+  const playHours = Math.max(3, 4 + stars*2 + Math.floor(Math.random()*3)-1);
+  const catalogCode = `PP-${String(Math.floor(1000+Math.random()*9000))}`;
+  const hypeBank = stars>=5 ? HYPE_HIGH : stars<=2 ? HYPE_LOW : null;
+  const hypeLabel = hypeBank ? randPick(hypeBank) : null;
+
+  return {
+    id:'work_'+Date.now()+'_'+Math.floor(Math.random()*1000),
+    title, tagline, stars, criticScore, quote, reaction, synopsis, emojiCombo,
+    genre:project.name, genreColor:project.color, sales, style, gambleResult,
+    themeSong, songCredit, playHours, catalogCode, hypeLabel,
+    cast: squad.map(c=>`${c.name}（${c.role}）`),
+    isTrend: !!opts.isTrend, streakBonus, synergies: synergies||[],
+  };
+}
+
+
+const VILLAGERS_DEF = [
+  {id:'moko', name:'ツキ', emoji:'🌝', personality:'のんびり', role:'シナリオライター', roleEmoji:'📝',
+    tech:2, idea:6, coop:3, scoutCost:60,
+    lines:['今日もいい風だね〜。','昼寝にちょうどいい日和だ。','急いでもいいことないよ、たぶん。','…夜中、外で誰かが数を数える声、聞こえなかった？気のせいならいいけど。']},
+  {id:'pyon', name:'ヒヨリ', emoji:'🌞', personality:'げんき', role:'イラストレーター', roleEmoji:'🎨',
+    tech:4, idea:5, coop:3, scoutCost:60,
+    lines:['やっほー！今日も元気いっぱい！','一緒に何か集めない？','走り回るの、気持ちいいよね！','森の奥まで走ったことあるよ。……なんで戻ってこられたのか、実はよく覚えてないんだ。']},
+  {id:'konta', name:'ウラ', emoji:'🌚', personality:'いたずら', role:'プログラマー', roleEmoji:'💻',
+    tech:6, idea:2, coop:2, scoutCost:70,
+    lines:['ねえねえ、いいものあげようか…なんてね。','裏の茂み、探してみた？','驚かせようと思ったのに先にバレたか。','森の奥で拾ったノート、読んだ？……あれ、僕が置いたんじゃないんだよね。']},
+  {id:'ponzu', name:'カサネ', emoji:'🪆', personality:'マイペース', role:'作曲家', roleEmoji:'🎵',
+    tech:3, idea:4, coop:3, scoutCost:55,
+    lines:['……あ、いたんだ。','急かさないでね、自分のペースがあるから。','今日は特に何も。それだけ。','……さっきまで、ここにもう一人いた気がするんだけどな。']},
+  {id:'penta', name:'ぺんた', emoji:'🐧', personality:'きれい好き', role:'声優', roleEmoji:'🎤',
+    tech:1, idea:3, coop:6, scoutCost:55,
+    lines:['お家、ちゃんと片付けてる？','ゴミが落ちてないか、いつも気になる。','きれい好きは性格ですって、よく言われる。','玄関の前に、小さな白い足あとがついてたの。うちには子ども、いないのにね。']},
+];
+const REQUEST_MATERIALS = ['wood','apple','chestnut','flower','fossil'];
+const GIFT_REACTIONS = {
+  'のんびり': ['わあ、ありがとう…急いでお礼考えなきゃ。','こういうの、もらうと嬉しいな。'],
+  'げんき':   ['やったー！ありがとう！！','うれしい！お返し考えとくね！'],
+  'いたずら': ['お、いいもの持ってるじゃん。……ありがと。','ふふ、これは借りができたな。'],
+  'マイペース':['……ん、ありがとう。','こういう気遣い、嫌いじゃないよ。'],
+  'きれい好き':['きれいな物ね、大事にするわ。ありがとう。','ちゃんとお礼言っておくね。ありがとう。'],
+};
+
+/* ============================================================
+   STATE
+   ============================================================ */
+let G = null; // game state
+let keys = {};
+let lastTime = 0;
+let particles = [];
+let placementItem = null;
+let movingFurniture = null;
+
+function newGame(playerName, villageName, avatar, playerColor){
+  const map = buildMap();
+  const solid = new Set();
+  markWaterSolid(map, solid);
+
+  const buildings = [
+    {id:'house', name:'あなたの家', c:7, r:1, w:2, h:2, color:'#FFD9C0', icon:'🏠', doorC:7, doorR:3},
+    {id:'shop',  name:'よろず商店', c:13, r:1, w:2, h:2, color:'#C7E8CA', icon:'🏪', doorC:13, doorR:3},
+    {id:'workshop', name:'こうぼう', c:2, r:1, w:2, h:2, color:'#D8C7F0', icon:'🎨', doorC:2, doorR:3},
+  ];
+  buildings.forEach(b=>{
+    for(let r=b.r;r<b.r+b.h;r++) for(let c=b.c;c<b.c+b.w;c++) solid.add(c+','+r);
+  });
+
+  // reserve door tiles + the tile directly in front of each door so nothing ever blocks entry
+  const reserved = new Set();
+  buildings.forEach(b=>{
+    reserved.add(b.doorC+','+b.doorR);
+    reserved.add(b.doorC+','+(b.doorR+1));
+  });
+
+  const trees = [];
+  for(let i=0;i<11;i++){
+    const t = randomFreeTile(map, solid, false, reserved);
+    if(t){ trees.push({c:t.c, r:t.r, shaken:false}); solid.add(t.c+','+t.r); }
+  }
+
+  const fishSpots = computeFishSpots(map);
+
+  const villagers = VILLAGERS_DEF.map(v=>{
+    const t = randomFreeTile(map, solid, true, reserved);
+    return {...v, x:(t?t.c:9)*TILE+TILE/2, y:(t?t.r:6)*TILE+TILE/2, tx:null, ty:null, moveTimer:Math.random()*2};
+  });
+
+  const state = {
+    playerName, villageName, avatar, playerColor: playerColor||PLAYER_COLORS[0],
+    day:1, bells:300, popularity:0,
+    phase:'day', phaseElapsed:0,
+    map, solid, reserved, buildings, trees, fishSpots, villagers,
+    bugs:[], sparkles:[],
+    inventory:{},
+    houseFurniture:[],
+    placedFurnitureTypes:[],
+    scene:'village',
+    player:{ x:9*TILE+TILE/2, y:8*TILE+TILE/2, dir:'down', speed:120 },
+    lastDialogue:null,
+    studio:[], gallery:[], workDefs:{}, songs:[], bgmDaySongId:null, bgmNightSongId:null,
+    villagerGifts:{}, villagerStatBonus:{},
+    forest:null, lightGauge:LIGHT_GAUGE_MAX,
+    acquireLog:[],
+    trendGenre: PROJECTS_BASE[Math.floor(Math.random()*PROJECTS_BASE.length)].name,
+    lastGenre:null, genreStreak:0,
+    loreCount:{note:0, odd:0}, depthsUnlocked:false, depthsCompleted:false,
+  };
+  spawnDailies(state);
+  return state;
+}
+
+function buildMap(){
+  const m = [];
+  for(let r=0;r<ROWS;r++){
+    const row=[];
+    for(let c=0;c<COLS;c++) row.push(0);
+    m.push(row);
+  }
+  // pond blob bottom-left
+  const pond = [[2,7],[3,7],[4,7],[2,8],[3,8],[4,8],[5,8],[2,9],[3,9],[4,9],[3,10]];
+  pond.forEach(([c,r])=>{ if(m[r]) m[r][c]=2; });
+  // paths
+  for(let r=0;r<ROWS;r++) m[r][9]=1;
+  for(let c=2;c<=13;c++) m[6][c]=1;
+  // flowers decorative
+  const flowers = [[15,3],[16,3],[15,4],[6,9],[7,9],[6,10],[12,9],[13,10]];
+  flowers.forEach(([c,r])=>{ if(m[r] && m[r][c]===0) m[r][c]=4; });
+  // ひまわり畑（既存の花とは別の一角）
+  SUNFLOWER_TILES.forEach(([c,r])=>{ if(m[r] && m[r][c]===0) m[r][c]=4; });
+  return m;
+}
+
+/* ============================================================
+   FOREST ZONE (未開拓の森) — v1
+   A separate wilderness area outside the village, reached via a
+   gate at the top of the village's main path. Kept in its own
+   functions/state so future updates (deeper levels, creatures,
+   seasonal changes) can be added without touching village code.
+   ============================================================ */
+const LIGHT_GAUGE_MAX = 100;
+const DAY_PHASE_SECONDS = 1800; // 昼の長さ（実時間・秒＝30分）。夜は寝るまで終わらない。
+const LIGHT_DRAIN_PER_SEC = 100/75; // ~75 seconds of light per visit
+const FOREST_GATE_TILE = {c:9, r:0};
+const FOREST_EXIT_TILE = {c:9, r:ROWS-1};
+
+/* ---------- 森の最奥（ふかい場所） ---------- */
+const DEPTHS_UNLOCK_NOTE = 6; // 「白いノートの切れ端」の累計取得数でアンロック
+const DEPTHS_UNLOCK_ODD = 6;  // 「誰かの忘れ物」の累計取得数でアンロック
+const DEPTHS_DOOR_TILE = {c:9, r:1};   // 最奥エリア内の出入り口
+const DEPTHS_SHRINE_TILE = {c:9, r:8}; // 最奥にあるほこら
+const DEPTHS_LINES = [
+  'ここには、誰かがずっと昔から座っていた跡があるような気がした。',
+  '風もないのに、木々がやさしく揺れた。',
+  '遠くで、誰かが鼻歌を歌っているような、歌っていないような。',
+  '足元に、小さな靴の跡が続いていた。今のものではなさそうだった。',
+  '寒くはないのに、少しだけ肌寒く感じた。',
+];
+const DEPTHS_LINES_AFTER = [
+  'ほこらは、今日も静かにそこにあった。',
+  'あの日と同じ、やわらかい気配がした。',
+];
+const DEPTHS_CLIMAX_TEXT = 'ほこらにそっと触れた瞬間、誰かがすぐ隣に座ったような気がした。振り向いても、やっぱり誰もいない。けれど、責められているような怖さはなく――長いあいだひとりで待っていた誰かに、ようやく「おかえり」と言えたような、そんな静かな気持ちだけが胸に残った。白いワンピースの裾のようなものが、木漏れ日の中でほんの一瞬ふわりと揺れて、それきり見えなくなった。';
+
+function buildForestMap(){
+  const m = [];
+  for(let r=0;r<ROWS;r++){
+    const row=[];
+    for(let c=0;c<COLS;c++) row.push(5); // 5 = forest floor
+    m.push(row);
+  }
+  for(let r=0;r<ROWS;r++) m[r][9]=1; // path continuing in from the gate
+  return m;
+}
+
+function randomFreeForestTile(map, solid){
+  for(let tries=0; tries<200; tries++){
+    const c = 1+Math.floor(Math.random()*(COLS-2));
+    const r = 1+Math.floor(Math.random()*(ROWS-2));
+    if(solid.has(c+','+r)) continue;
+    if(c===9) continue; // keep the entry path clear
+    return {c,r};
+  }
+  return null;
+}
+
+function randomForestTileNearPlayer(minTiles, maxTiles){
+  if(!G.forest) return null;
+  const pc = G.player.x/TILE, pr = G.player.y/TILE;
+  for(let tries=0; tries<60; tries++){
+    const ang = Math.random()*Math.PI*2;
+    const dist = minTiles + Math.random()*(maxTiles-minTiles);
+    const c = Math.round(pc + Math.cos(ang)*dist);
+    const r = Math.round(pr + Math.sin(ang)*dist);
+    if(c<1||c>=COLS-1||r<1||r>=ROWS-1) continue;
+    if(G.forest.solid.has(c+','+r)) continue;
+    return {c,r};
+  }
+  return randomFreeForestTile(G.forest.map, G.forest.solid);
+}
+
+function nearestTreeTile(fromC, fromR){
+  if(!G.forest) return null;
+  const all = [...(G.forest.trees||[]), ...(G.forest.ancientTrees||[])];
+  let best=null, bestD=Infinity;
+  all.forEach(t=>{
+    const d = Math.hypot(t.c-fromC, t.r-fromR);
+    if(d<bestD){ bestD=d; best=t; }
+  });
+  return best;
+}
+
+function setGroupOpacity(group, alpha){
+  group.traverse(obj=>{
+    if(obj.material){
+      obj.material.transparent = true;
+      obj.material.opacity = obj.userData && obj.userData.isShadow ? alpha*0.18 : alpha;
+    }
+  });
+}
+
+function generateForestZone(){
+  const map = buildForestMap();
+  const solid = new Set();
+  const trees = [];
+  for(let i=0;i<20;i++){
+    const t = randomFreeForestTile(map, solid);
+    if(t){ trees.push({c:t.c, r:t.r, shaken:false}); solid.add(t.c+','+t.r); }
+  }
+  const ancientTrees = [];
+  for(let i=0;i<2;i++){
+    const t = randomFreeForestTile(map, solid);
+    if(t){ ancientTrees.push({c:t.c, r:t.r, shaken:false}); solid.add(t.c+','+t.r); }
+  }
+  if(G.depthsUnlocked && ancientTrees[0]) ancientTrees[0].deepEntrance = true;
+  const sparkles = [];
+  for(let i=0;i<3;i++){
+    const t = randomFreeForestTile(map, solid);
+    if(t) sparkles.push({c:t.c, r:t.r});
+  }
+  return {map, solid, trees, ancientTrees, sparkles, zone:'outer'};
+}
+
+function generateDepthsZone(){
+  const map = buildForestMap();
+  const solid = new Set();
+  const ancientTrees = [];
+  [{c:5,r:4},{c:13,r:4},{c:5,r:9},{c:13,r:9}].forEach(s=>{
+    ancientTrees.push({c:s.c, r:s.r, usedThisVisit:false});
+    solid.add(s.c+','+s.r);
+  });
+  solid.add(DEPTHS_SHRINE_TILE.c+','+DEPTHS_SHRINE_TILE.r);
+  const sparkles = [];
+  for(let i=0;i<3;i++){
+    const t = randomFreeForestTile(map, solid);
+    if(t) sparkles.push({c:t.c, r:t.r});
+  }
+  return {
+    map, solid, trees:[], ancientTrees, sparkles, zone:'depths',
+    shrine:{c:DEPTHS_SHRINE_TILE.c, r:DEPTHS_SHRINE_TILE.r, done:G.depthsCompleted},
+  };
+}
+
+function markWaterSolid(map, solid){
+  for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++) if(map[r][c]===2) solid.add(c+','+r);
+}
+
+function computeFishSpots(map){
+  const spots = [];
+  const seen = new Set();
+  for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
+    if(map[r][c]!==2) continue;
+    [[1,0],[-1,0],[0,1],[0,-1]].forEach(([dc,dr])=>{
+      const nc=c+dc, nr=r+dr;
+      if(nr<0||nr>=ROWS||nc<0||nc>=COLS) return;
+      if(map[nr][nc]!==2 && !seen.has(nc+','+nr)){ seen.add(nc+','+nr); spots.push({c:nc,r:nr}); }
+    });
+  }
+  return spots;
+}
+
+function randomFreeTile(map, solid, allowNearWater, reserved){
+  for(let tries=0; tries<200; tries++){
+    const c = 1+Math.floor(Math.random()*(COLS-2));
+    const r = 1+Math.floor(Math.random()*(ROWS-2));
+    if(solid.has(c+','+r)) continue;
+    if(reserved && reserved.has(c+','+r)) continue;
+    if(map[r][c]===2) continue;
+    if(c===9 && map[r][c]===1) continue; // keep main path a bit clearer
+    return {c,r};
+  }
+  return null;
+}
+
+function spawnDailies(state){
+  state.trees.forEach(t=>t.shaken=false);
+  state.bugs = [];
+  for(let i=0;i<4;i++){
+    const t = randomFreeTile(state.map, state.solid, false, state.reserved);
+    if(!t) continue;
+    const type = ['bug_butterfly','bug_ladybug','bug_bee'][Math.floor(Math.random()*3)];
+    state.bugs.push({id:Math.random().toString(36).slice(2,8), type, x:t.c*TILE+TILE/2, y:t.r*TILE+TILE/2, moveTimer:Math.random()*2});
+  }
+  state.sparkles = [];
+  for(let i=0;i<3;i++){
+    const t = randomFreeTile(state.map, state.solid, false, state.reserved);
+    if(!t) continue;
+    state.sparkles.push({c:t.c, r:t.r});
+  }
+}
+
+/* ============================================================
+   SAVE / LOAD
+   ============================================================ */
+function saveGame(){
+  try{
+    const slim = {
+      playerName:G.playerName, villageName:G.villageName, avatar:G.avatar, playerColor:G.playerColor,
+      day:G.day, bells:G.bells, popularity:G.popularity, inventory:G.inventory, houseFurniture:G.houseFurniture,
+      placedFurnitureTypes:G.placedFurnitureTypes,
+      studio:G.studio, gallery:G.gallery, workDefs:G.workDefs, acquireLog:G.acquireLog, songs:G.songs,
+      bgmDaySongId:G.bgmDaySongId, bgmNightSongId:G.bgmNightSongId,
+      villagerGifts:G.villagerGifts, villagerStatBonus:G.villagerStatBonus,
+      phase:G.phase, phaseElapsed:G.phaseElapsed,
+      trendGenre:G.trendGenre, lastGenre:G.lastGenre, genreStreak:G.genreStreak,
+      loreCount:G.loreCount, depthsUnlocked:G.depthsUnlocked, depthsCompleted:G.depthsCompleted,
+    };
+    localStorage.setItem('tsukurumura_save', JSON.stringify(slim));
+  }catch(e){ /* storage unavailable, ignore */ }
+}
+function loadSaveRaw(){
+  try{
+    const raw = localStorage.getItem('tsukurumura_save');
+    return raw ? JSON.parse(raw) : null;
+  }catch(e){ return null; }
+}
+function backupCurrentSave(){
+  try{
+    const raw = localStorage.getItem('tsukurumura_save');
+    if(raw) localStorage.setItem('tsukurumura_save_backup', raw);
+  }catch(e){ /* storage unavailable, ignore */ }
+}
+function loadBackupRaw(){
+  try{
+    const raw = localStorage.getItem('tsukurumura_save_backup');
+    return raw ? JSON.parse(raw) : null;
+  }catch(e){ return null; }
+}
+function exportSaveToFile(){
+  const raw = localStorage.getItem('tsukurumura_save');
+  if(!raw){ showFlavorToast && showFlavorToast('セーブデータがありません。'); return; }
+  const blob = new Blob([raw], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const vname = (loadSaveRaw()||{}).villageName || 'village';
+  a.download = `tsukurumura_save_${vname}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url), 3000);
+}
+function importSaveFromFile(file, onDone){
+  const reader = new FileReader();
+  reader.onload = ()=>{
+    try{
+      const parsed = JSON.parse(reader.result);
+      if(!parsed || typeof parsed!=='object') throw new Error('invalid');
+      backupCurrentSave();
+      localStorage.setItem('tsukurumura_save', JSON.stringify(parsed));
+      onDone(true);
+    }catch(e){
+      onDone(false);
+    }
+  };
+  reader.onerror = ()=> onDone(false);
+  reader.readAsText(file);
+}
+function loadSaveIntoGame(data){
+  G = newGame(data.playerName, data.villageName, data.avatar||AVATARS[0], data.playerColor||PLAYER_COLORS[0]);
+  G.day = data.day||1;
+  G.bells = data.bells!=null?data.bells:300;
+  G.popularity = data.popularity||0;
+  G.inventory = data.inventory||{};
+  G.houseFurniture = data.houseFurniture||[];
+  G.placedFurnitureTypes = data.placedFurnitureTypes||[];
+  G.studio = data.studio||[];
+  G.gallery = data.gallery||[];
+  G.workDefs = data.workDefs||{};
+  G.acquireLog = data.acquireLog||[];
+  G.songs = data.songs||[];
+  G.bgmDaySongId = data.bgmDaySongId!=null ? data.bgmDaySongId : (data.bgmSongId||null);
+  G.bgmNightSongId = data.bgmNightSongId||null;
+  G.villagerGifts = data.villagerGifts||{};
+  G.villagerStatBonus = data.villagerStatBonus||{};
+  G.phase = data.phase||'day';
+  G.phaseElapsed = data.phaseElapsed||0;
+  G.trendGenre = data.trendGenre || G.trendGenre;
+  G.lastGenre = data.lastGenre || null;
+  G.genreStreak = data.genreStreak || 0;
+  // 既存セーブ互換：以前から持っていた分は「手持ち数」を最低ラインとして累計に反映する
+  const invNote = (G.inventory && G.inventory['note_page']) || 0;
+  const invOdd = (G.inventory && G.inventory['odd_item']) || 0;
+  const savedLore = data.loreCount || {note:0, odd:0};
+  G.loreCount = {
+    note: Math.max(savedLore.note||0, invNote),
+    odd: Math.max(savedLore.odd||0, invOdd),
+  };
+  G.depthsUnlocked = !!data.depthsUnlocked;
+  G.depthsCompleted = !!data.depthsCompleted;
+  if(!G.depthsUnlocked && G.loreCount.note>=DEPTHS_UNLOCK_NOTE && G.loreCount.odd>=DEPTHS_UNLOCK_ODD){
+    G.depthsUnlocked = true;
+  }
+}
+
+/* ============================================================
+   UI: START SCREEN
+   ============================================================ */
+function renderStart(){
+  const app = document.getElementById('app');
+  const existing = loadSaveRaw();
+  const backup = loadBackupRaw();
+  let selectedAvatar = AVATARS[0];
+  let selectedColor = PLAYER_COLORS[0];
+  app.innerHTML = `
+    <div class="panel">
+      <h2 style="margin:0 0 4px;color:var(--wood-d);">村の住人になる</h2>
+      <p style="font-size:12.5px;color:#7a7263;margin:0 0 14px;">木を揺らし、虫を捕まえ、釣りをして、村人と過ごす。日常は変わらず続いていく——ただし、鳥居の奥の「森の奥」だけは、灯りが尽きる前に戻ること。誰も、正体は教えてくれない。</p>
+      <div class="start-field">
+        <label>あなたの名前</label>
+        <input id="inpName" placeholder="れい：ひなた" maxlength="8">
+      </div>
+      <div class="start-field">
+        <label>村の名前</label>
+        <input id="inpVillage" placeholder="れい：しろい村" maxlength="10">
+      </div>
+      <div class="start-field">
+        <label>アバターを選ぶ</label>
+        <div class="avatar-row" id="avatarRow">
+          ${AVATARS.map((a,i)=>`<button class="avatar-btn ${i===0?'active':''}" data-a="${a}">${a}</button>`).join('')}
+        </div>
+      </div>
+      <div class="start-field">
+        <label>キャラクターの色</label>
+        <div class="avatar-row" id="colorRow">
+          ${PLAYER_COLORS.map((c,i)=>`<button class="avatar-btn ${i===0?'active':''}" data-c="${c}" style="background:${c};border-color:${c};"></button>`).join('')}
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn" id="btnStart">🕯️ 村をはじめる</button>
+        ${existing ? '<button class="btn secondary" id="btnContinue">▶ 続きから</button>' : ''}
+      </div>
+      <div class="btn-row" style="margin-top:8px;">
+        ${backup ? '<button class="mini-btn" id="btnRestoreBackup">🗂️ 前のデータを復元する</button>' : ''}
+        ${existing ? '<button class="mini-btn" id="btnExportSave">💾 セーブデータを書き出す</button>' : ''}
+        <button class="mini-btn" id="btnImportSave">📂 セーブデータを読み込む</button>
+        <input type="file" id="fileImportSave" accept="application/json" style="display:none;">
+      </div>
+    </div>
+    <div class="footer-note">PC：矢印キー/WASDで移動、Shiftでダッシュ、E（またはスペース）でアクション<br>スマホ：画面下のボタンで移動・ダッシュ・アクション<br>——森の奥では、灯りだけが頼りです。</div>
+  `;
+  document.querySelectorAll('.avatar-btn[data-a]').forEach(btn=>{
+    btn.onclick = ()=>{
+      document.querySelectorAll('.avatar-btn[data-a]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      selectedAvatar = btn.dataset.a;
+    };
+  });
+  document.querySelectorAll('.avatar-btn[data-c]').forEach(btn=>{
+    btn.onclick = ()=>{
+      document.querySelectorAll('.avatar-btn[data-c]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      selectedColor = btn.dataset.c;
+    };
+  });
+  document.getElementById('btnStart').onclick = ()=>{
+    const name = document.getElementById('inpName').value.trim() || 'ひなた';
+    const village = document.getElementById('inpVillage').value.trim() || 'ふわふわ村';
+    const startNew = ()=>{
+      G = newGame(name, village, selectedAvatar, selectedColor);
+      saveGame();
+      startGameLoop();
+    };
+    if(existing){
+      openModal(`
+        <h2>⚠️ 新しく村をはじめますか？</h2>
+        <p class="mdesc">すでに「${existing.villageName||'村'}」のデータがあります。ここで新しく村をはじめると、そのデータは上書きされて消えてしまいます。よろしいですか？</p>
+        <div class="btn-row" style="margin-top:12px;">
+          <button class="mini-btn" id="confirmNewYes" style="background:#FF5C5C;color:#fff;">新しくはじめる</button>
+          <button class="mini-btn" id="confirmNewNo">キャンセル</button>
+        </div>
+      `);
+      document.getElementById('confirmNewYes').onclick = ()=>{ backupCurrentSave(); closeModal(); startNew(); };
+      document.getElementById('confirmNewNo').onclick = closeModal;
+    } else {
+      startNew();
+    }
+  };
+  const cbtn = document.getElementById('btnContinue');
+  if(cbtn){
+    cbtn.onclick = ()=>{
+      loadSaveIntoGame(existing);
+      startGameLoop();
+      const activeId = currentBgmSongId();
+      const song = activeId ? G.songs.find(s=>s.id===activeId) : null;
+      if(song) startBGM(song);
+    };
+  }
+  const restoreBtn = document.getElementById('btnRestoreBackup');
+  if(restoreBtn){
+    restoreBtn.onclick = ()=>{
+      openModal(`
+        <h2>🗂️ 前のデータを復元しますか？</h2>
+        <p class="mdesc">上書きされる前のデータ（「${backup.villageName||'村'}」）を復元します。今のセーブデータは、この操作でさらに上書きされます。</p>
+        <div class="btn-row" style="margin-top:12px;">
+          <button class="mini-btn buy" id="restoreYes">復元する</button>
+          <button class="mini-btn" id="restoreNo">キャンセル</button>
+        </div>
+      `);
+      document.getElementById('restoreYes').onclick = ()=>{
+        localStorage.setItem('tsukurumura_save', JSON.stringify(backup));
+        closeModal();
+        renderStart();
+      };
+      document.getElementById('restoreNo').onclick = closeModal;
+    };
+  }
+  const exportBtn = document.getElementById('btnExportSave');
+  if(exportBtn) exportBtn.onclick = exportSaveToFile;
+  const importBtn = document.getElementById('btnImportSave');
+  const fileInput = document.getElementById('fileImportSave');
+  if(importBtn && fileInput){
+    importBtn.onclick = ()=> fileInput.click();
+    fileInput.onchange = ()=>{
+      const file = fileInput.files[0];
+      fileInput.value = '';
+      if(!file) return;
+      importSaveFromFile(file, (ok)=>{
+        if(ok){
+          openModal(`
+            <h2>📂 読み込みました</h2>
+            <p class="mdesc">セーブデータを読み込みました。（元のデータは復元用にバックアップされています）</p>
+            <div class="btn-row" style="margin-top:10px;"><button class="mini-btn buy" id="importOk">とじる</button></div>
+          `);
+          document.getElementById('importOk').onclick = ()=>{ closeModal(); renderStart(); };
+        } else {
+          openModal(`
+            <h2>⚠️ 読み込みに失敗しました</h2>
+            <p class="mdesc">ファイルの形式が正しくないようです。書き出したセーブデータ（.json）を選んでください。</p>
+            <div class="btn-row" style="margin-top:10px;"><button class="mini-btn" id="importFail">とじる</button></div>
+          `);
+          document.getElementById('importFail').onclick = closeModal;
+        }
+      });
+    };
+  }
+}
+
+/* ============================================================
+   UI: GAME SCREEN SHELL
+   ============================================================ */
+function renderGameShell(){
+  const app = document.getElementById('app');
+  app.innerHTML = `
+    <div class="hud-top">
+      <div class="hud-chip">📅 ${G.day}日目</div>
+      <div class="hud-chip">💰 ${G.bells} ベル</div>
+      <div class="hud-chip">⭐ 人気度 ${G.popularity}</div>
+      <div class="hud-chip">${G.avatar} ${G.playerName}／${G.villageName}</div>
+    </div>
+    <div class="light-gauge-wrap" id="lightGaugeWrap" style="display:${G.scene==='forest'?'block':'none'};">
+      <div class="light-gauge-label">🕯️ 灯り</div>
+      <div class="light-gauge-track"><div class="light-gauge-fill" id="lightGaugeFill" style="width:${G.lightGauge}%;"></div></div>
+    </div>
+    <div class="canvas-wrap">
+      <div id="canvasWrap3d"></div>
+      <div class="tilt-band top"></div>
+      <div class="tilt-band bottom"></div>
+      <div class="prompt-bubble" id="promptBubble"></div>
+      <div class="prompt-bubble toast-bubble" id="toastBubble"></div>
+    </div>
+    <div class="controls-row">
+      <div class="dpad">
+        <div></div><button class="dbtn" data-k="up">▲</button><div></div>
+        <button class="dbtn" data-k="left">◀</button><div></div><button class="dbtn" data-k="right">▶</button>
+        <div></div><button class="dbtn" data-k="down">▼</button><div></div>
+      </div>
+      <div class="right-controls">
+        <button class="run-btn" id="btnRun">🏃<span>ダッシュ</span></button>
+        <button class="action-btn" id="btnAction">アクション</button>
+      </div>
+    </div>
+    <div class="inv-strip" id="invStrip"></div>
+    <div class="acquire-log-wrap">
+      <div class="acquire-log-title">📜 入手ログ</div>
+      <div class="acquire-log" id="acquireLog"></div>
+    </div>
+    <div class="footer-note">画面下のボタン（またはPCなら矢印キー/WASD・Shift・E）で操作／おうちの中で「ベッド」に近づいてアクションすると眠れます</div>
+  `;
+  wireControls();
+  renderInventoryStrip();
+}
+
+function renderInventoryStrip(){
+  const strip = document.getElementById('invStrip');
+  if(!strip) return;
+  const entries = Object.entries(G.inventory).filter(([k,v])=>v>0);
+  if(entries.length===0){ strip.innerHTML = '<div style="font-size:11px;color:#a08f6f;padding:8px;">持ち物はまだありません。村で集めてみよう。</div>'; return; }
+  strip.innerHTML = entries.map(([id,count])=>{
+    const it = getItemDef(id);
+    if(!it) return '';
+    return `<div class="inv-item"><div class="ii-icon">${it.icon}</div><div class="ii-count">${it.name} ×${count}</div></div>`;
+  }).join('');
+}
+
+function wireControls(){
+  const dpadMap = {up:'ArrowUp', down:'ArrowDown', left:'ArrowLeft', right:'ArrowRight'};
+  document.querySelectorAll('.dbtn').forEach(btn=>{
+    const key = dpadMap[btn.dataset.k];
+    const press = (e)=>{ e.preventDefault(); keys[key]=true; };
+    const release = (e)=>{ e.preventDefault(); keys[key]=false; };
+    btn.addEventListener('mousedown', press);
+    btn.addEventListener('touchstart', press, {passive:false});
+    btn.addEventListener('mouseup', release);
+    btn.addEventListener('touchend', release, {passive:false});
+    btn.addEventListener('mouseleave', release);
+  });
+  const runBtn = document.getElementById('btnRun');
+  if(runBtn){
+    const pressRun = (e)=>{ e.preventDefault(); keys['ShiftLeft']=true; runBtn.classList.add('active'); };
+    const releaseRun = (e)=>{ e.preventDefault(); keys['ShiftLeft']=false; runBtn.classList.remove('active'); };
+    runBtn.addEventListener('mousedown', pressRun);
+    runBtn.addEventListener('touchstart', pressRun, {passive:false});
+    runBtn.addEventListener('mouseup', releaseRun);
+    runBtn.addEventListener('touchend', releaseRun, {passive:false});
+    runBtn.addEventListener('mouseleave', releaseRun);
+  }
+  document.getElementById('btnAction').addEventListener('click', ()=>{
+    const modalOpen = document.getElementById('modalOverlay').classList.contains('show');
+    if(modalOpen){
+      const closeBtn = document.getElementById('closeDialogue');
+      if(closeBtn) closeBtn.click();
+      return;
+    }
+    doAction();
+  });
+}
+
+/* ============================================================
+   GAME LOOP
+   ============================================================ */
+function startGameLoop(){
+  renderGameShell();
+  renderAcquireLog();
+  initThreeScene();
+  lastTime = performance.now();
+  requestAnimationFrame(loop);
+}
+
+function loop(t){
+  const dt = Math.min(0.05, (t-lastTime)/1000);
+  lastTime = t;
+  update(dt);
+  draw();
+  requestAnimationFrame(loop);
+}
+
+function update(dt){
+  updateDayNightCycle(dt);
+  updatePlayer(dt);
+  updateVillagers(dt);
+  updateBugs(dt);
+  updateParticles(dt);
+  updatePrompt();
+  updateLightGauge(dt);
+  updatePaleEncounterTimer(dt);
+}
+
+function updateDayNightCycle(dt){
+  if(G.phase==null) G.phase = 'day';
+  if(G.phaseElapsed==null) G.phaseElapsed = 0;
+  if(G.phase==='day'){
+    G.phaseElapsed += dt;
+    if(G.phaseElapsed >= DAY_PHASE_SECONDS){
+      G.phase = 'night';
+      G.phaseElapsed = 0;
+      applyPhaseLighting();
+      refreshBgmForCurrentPhase();
+      showFlavorToast('夜になった。村から人の気配が消えていく。');
+      renderGameShellTop();
+    }
+  }
+  // 夜は寝るまで自然には明けない
+}
+
+/* ---------- 森の奥：気配イベント（正体を説明しない気配演出） ---------- */
+function updatePaleEncounterTimer(dt){
+  if(G.scene!=='forest' || !G.forest) return;
+  if(G.forest.zone==='depths'){
+    if(G.forest.paleTimer==null) G.forest.paleTimer = 3+Math.random()*2;
+    G.forest.paleTimer -= dt;
+    if(G.forest.paleTimer<=0){
+      G.forest.paleTimer = 4+Math.random()*3;
+      showFlavorToast(randPick(DEPTHS_LINES));
+    }
+    return;
+  }
+  if(G.forest.paleTimer==null) G.forest.paleTimer = 5+Math.random()*3;
+  G.forest.paleTimer -= dt;
+  if(G.forest.paleTimer<=0){
+    const urgency = 1 - (G.lightGauge/LIGHT_GAUGE_MAX); // 灯りが減るほど頻度が上がる
+    G.forest.paleTimer = Math.max(3, 8 - urgency*3) + Math.random()*3;
+    if(Math.random() < 0.5 + urgency*0.2) triggerForestPhenomenon();
+  }
+}
+
+function triggerForestPhenomenon(){
+  if(G.phase==='night' && G.villagers.length && Math.random() < 0.10){
+    spawnVillagerSightingEvent();
+    return;
+  }
+  const roll = Math.random();
+  if(roll < 0.14) spawnFigureEncounter();
+  else if(roll < 0.30) spawnSoundEvent();
+  else if(roll < 0.42) spawnFoundObjectEvent();
+  else if(roll < 0.54) spawnDisorientEvent();
+  else if(roll < 0.62) spawnLightFlickerEvent();
+  else if(roll < 0.82) spawnGentleBreezeEvent();
+  else spawnFireflyEvent();
+}
+
+const FOREST_GENTLE_LINES = [
+  '木々の間を、やわらかい風が通り抜けていった。',
+  'どこかで小鳥がひと声だけ鳴いた。',
+  '木漏れ日が、地面にゆっくり模様を描いていた。',
+  '葉っぱが一枚、ひらひらと落ちてきた。',
+  '木の匂いが、ふっと濃くなった気がした。',
+];
+function spawnGentleBreezeEvent(){
+  showFlavorToast(randPick(FOREST_GENTLE_LINES));
+  if(Math.random()<0.35){
+    const got = randPick(['wood','chestnut','mushroom']);
+    addItem(got,1);
+    addParticle(`+1 ${getItemDef(got).icon}`, G.player.x, G.player.y);
+    renderInventoryStrip(); saveGame();
+  }
+}
+
+const FOREST_FIREFLY_LINES = [
+  '足元に、ほたるの光がふわりと集まってきた。',
+  '小さな光が、道しるべのようにまたたいた。',
+  'ほたるの光に、少しだけ心が落ち着いた。',
+];
+function spawnFireflyEvent(){
+  const heal = 8+Math.random()*10;
+  G.lightGauge = Math.min(LIGHT_GAUGE_MAX, G.lightGauge+heal);
+  updateLightGaugeUI();
+  showFlavorToast(randPick(FOREST_FIREFLY_LINES));
+}
+
+function spawnFigureEncounter(){
+  if(!forestGroup || !G.forest) return;
+  const t = randomForestTileNearPlayer(2.5, 6);
+  if(!t) return;
+  const target = nearestTreeTile(t.c, t.r) || t;
+  const startPos = tileCenterWorld(t.c, t.r);
+  const endPos = tileCenterWorld(target.c, target.r);
+  const mesh = makePaleFigureMesh();
+  mesh.position.set(startPos.x, 0, startPos.z);
+  setGroupOpacity(mesh, 0);
+  forestGroup.add(mesh);
+  paleEncounters.push({
+    mesh, life:4.5, maxLife:4.5,
+    startX:startPos.x, startZ:startPos.z, endX:endPos.x, endZ:endPos.z,
+  });
+
+  G.lightGauge = Math.max(0, G.lightGauge - (6+Math.random()*8));
+  updateLightGaugeUI();
+
+  if(Math.random() < 0.3){
+    addItem('note_page', 1);
+    G.loreCount.note = (G.loreCount.note||0)+1;
+    checkDepthsUnlock();
+    renderInventoryStrip(); saveGame();
+    showFlavorToast('📄 白いノートの切れ端を拾った。');
+  } else {
+    showFlavorToast(randPick(PALE_LINES));
+  }
+}
+
+function spawnSoundEvent(){
+  G.lightGauge = Math.max(0, G.lightGauge - (2+Math.random()*4));
+  updateLightGaugeUI();
+  showFlavorToast(randPick(FOREST_SOUND_LINES));
+}
+
+function spawnDisorientEvent(){
+  showFlavorToast(randPick(FOREST_DISORIENT_LINES));
+}
+
+function spawnLightFlickerEvent(){
+  showFlavorToast(randPick(FOREST_FLICKER_LINES));
+  const fill = document.getElementById('lightGaugeFill');
+  if(fill){
+    fill.classList.remove('flicker');
+    void fill.offsetWidth; // restart animation
+    fill.classList.add('flicker');
+  }
+}
+
+function spawnFoundObjectEvent(){
+  addItem('odd_item', 1);
+  G.loreCount.odd = (G.loreCount.odd||0)+1;
+  checkDepthsUnlock();
+  renderInventoryStrip(); saveGame();
+  showFlavorToast('🎐 誰かの忘れ物を拾った。');
+}
+
+function checkDepthsUnlock(){
+  if(!G.depthsUnlocked && G.loreCount.note>=DEPTHS_UNLOCK_NOTE && G.loreCount.odd>=DEPTHS_UNLOCK_ODD){
+    G.depthsUnlocked = true;
+    showFlavorToast('森の一番奥から、かすかに何かが呼んでいるような気がした……');
+    saveGame();
+  }
+}
+
+function spawnVillagerSightingEvent(){
+  if(!forestGroup || !G.forest || !G.villagers.length) return;
+  const t = randomForestTileNearPlayer(3, 6);
+  if(!t) return;
+  const target = nearestTreeTile(t.c, t.r) || t;
+  const v = randPick(G.villagers);
+  const startPos = tileCenterWorld(t.c, t.r);
+  const endPos = tileCenterWorld(target.c, target.r);
+  const g = makeCharacterMesh(villagerBodyColor(v.id));
+  const face = makeEmojiSprite(v.emoji, 96);
+  face.position.set(0,0.5,0.05);
+  face.scale.set(.85,.85,.85);
+  g.add(face);
+  const bubble = makeSpeechBubbleSprite(randPick(FOREST_VILLAGER_LINES));
+  bubble.position.set(0, 0.95, 0);
+  g.add(bubble);
+  g.position.set(startPos.x, 0, startPos.z);
+  setGroupOpacity(g, 0);
+  forestGroup.add(g);
+  forestVillagerSightings.push({
+    mesh:g, life:7, maxLife:7,
+    startX:startPos.x, startZ:startPos.z, endX:endPos.x, endZ:endPos.z,
+    startPx: t.c*TILE+TILE/2, startPy: t.r*TILE+TILE/2,
+    endPx: target.c*TILE+TILE/2, endPy: target.r*TILE+TILE/2,
+    vanished:false,
+  });
+}
+
+function updateForestVillagerSightings(dt){
+  forestVillagerSightings = forestVillagerSightings.filter(s=>{
+    s.life -= dt;
+    const elapsed = s.maxLife - s.life;
+    if(!s.vanished){
+      const walkDuration = s.maxLife*0.8;
+      const walkT = Math.min(1, elapsed/walkDuration);
+      s.mesh.position.x = s.startX + (s.endX-s.startX)*walkT;
+      s.mesh.position.z = s.startZ + (s.endZ-s.startZ)*walkT;
+      const curPx = s.startPx + (s.endPx-s.startPx)*walkT;
+      const curPy = s.startPy + (s.endPy-s.startPy)*walkT;
+      let alpha = elapsed<0.4 ? elapsed/0.4 : (s.life<0.6 ? Math.max(0, s.life/0.6) : 1);
+      setGroupOpacity(s.mesh, alpha);
+      const dist = Math.hypot(G.player.x-curPx, G.player.y-curPy);
+      if(dist < TILE*2.2){
+        s.vanished = true;
+        s.life = Math.min(s.life, 0.4);
+        showFlavorToast(randPick(FOREST_VILLAGER_VANISH_LINES));
+      }
+    } else {
+      setGroupOpacity(s.mesh, Math.max(0, s.life/0.4));
+    }
+    if(s.life<=0){ forestGroup && forestGroup.remove(s.mesh); return false; }
+    return true;
+  });
+}
+
+function updatePaleEncounters(dt){
+  paleEncounters = paleEncounters.filter(p=>{
+    p.life -= dt;
+    const elapsed = p.maxLife - p.life;
+    const walkDuration = p.maxLife*0.75;
+    const walkT = Math.min(1, elapsed/walkDuration);
+    p.mesh.position.x = p.startX + (p.endX-p.startX)*walkT;
+    p.mesh.position.z = p.startZ + (p.endZ-p.startZ)*walkT;
+    let alpha;
+    if(elapsed<0.4) alpha = elapsed/0.4;
+    else if(p.life<0.6) alpha = Math.max(0, p.life/0.6);
+    else alpha = 1;
+    setGroupOpacity(p.mesh, alpha);
+    if(p.life<=0){ forestGroup && forestGroup.remove(p.mesh); return false; }
+    return true;
+  });
+}
+
+function updateLightGauge(dt){
+  if(G.scene!=='forest') return;
+  G.lightGauge -= dt*LIGHT_DRAIN_PER_SEC;
+  updateLightGaugeUI();
+  if(G.lightGauge<=0){
+    G.lightGauge = 0;
+    returnFromForestOutOfLight();
+  }
+}
+
+function updateLightGaugeUI(){
+  const el = document.getElementById('lightGaugeFill');
+  if(!el) return;
+  el.style.width = Math.max(0, G.lightGauge) + '%';
+}
+
+/* ---------- player movement ---------- */
+function updatePlayer(dt){
+  const p = G.player;
+  let dx=0, dy=0;
+  if(keys['ArrowUp']||keys['KeyW']) dy-=1;
+  if(keys['ArrowDown']||keys['KeyS']) dy+=1;
+  if(keys['ArrowLeft']||keys['KeyA']) dx-=1;
+  if(keys['ArrowRight']||keys['KeyD']) dx+=1;
+  if(dx===0&&dy===0) return;
+  const len = Math.hypot(dx,dy)||1;
+  dx/=len; dy/=len;
+  if(Math.abs(dx)>Math.abs(dy)) p.dir = dx>0?'right':'left';
+  else if(dy!==0) p.dir = dy>0?'down':'up';
+
+  const running = keys['ShiftLeft'] || keys['ShiftRight'];
+  const speed = p.speed * (running ? 1.8 : 1);
+  const nx = p.x + dx*speed*dt;
+  const ny = p.y + dy*speed*dt;
+  const r = 11;
+  if(!isSolidPx(nx, p.y, r)) p.x = nx;
+  if(!isSolidPx(p.x, ny, r)) p.y = ny;
+  p.x = Math.max(TILE*0.4, Math.min(CW-TILE*0.4, p.x));
+  p.y = Math.max(TILE*0.4, Math.min(CH-TILE*0.4, p.y));
+}
+
+function isSolidPx(x,y,r){
+  const pts = [[x-r,y-r],[x+r,y-r],[x-r,y+r],[x+r,y+r]];
+  for(const [px,py] of pts){
+    const c = Math.floor(px/TILE), row = Math.floor(py/TILE);
+    if(c<0||c>=COLS||row<0||row>=ROWS) return true;
+    if(G.scene==='village'){
+      if(G.solid.has(c+','+row)) return true;
+    } else if(G.scene==='forest'){
+      if(G.forest && G.forest.solid.has(c+','+row)) return true;
+    } else {
+      if(!inHouseFloor(c,row)) return true;
+      if(G.houseFurniture.some(f=>f.c===c&&f.r===row)) return true;
+    }
+  }
+  return false;
+}
+
+function inHouseFloor(c,r){
+  return c>=1 && c<=COLS-2 && r>=1 && r<=ROWS-2;
+}
+
+/* ---------- villagers ---------- */
+function updateVillagers(dt){
+  if(G.scene!=='village' || G.phase==='night') return;
+  G.villagers.forEach(v=>{
+    v.moveTimer -= dt;
+    if(v.moveTimer<=0){
+      v.moveTimer = 2+Math.random()*3;
+      const ang = Math.random()*Math.PI*2;
+      const dist = 20+Math.random()*30;
+      v.tx = v.x + Math.cos(ang)*dist;
+      v.ty = v.y + Math.sin(ang)*dist;
+      v.tx = Math.max(TILE, Math.min(CW-TILE, v.tx));
+      v.ty = Math.max(TILE, Math.min(CH-TILE, v.ty));
+    }
+    if(v.tx!=null){
+      const dx = v.tx-v.x, dy = v.ty-v.y;
+      const d = Math.hypot(dx,dy);
+      if(d>2){ v.x += (dx/d)*20*dt; v.y += (dy/d)*20*dt; }
+    }
+  });
+}
+
+function updateBugs(dt){
+  if(G.scene!=='village') return;
+  G.bugs.forEach(b=>{
+    b.moveTimer -= dt;
+    if(b.moveTimer<=0){
+      b.moveTimer = 1+Math.random()*2;
+      b.tx = b.x + (Math.random()-0.5)*40;
+      b.ty = b.y + (Math.random()-0.5)*40;
+    }
+    if(b.tx!=null){
+      const dx=b.tx-b.x, dy=b.ty-b.y, d=Math.hypot(dx,dy);
+      if(d>2){ b.x += (dx/d)*30*dt; b.y += (dy/d)*30*dt; }
+    }
+  });
+}
+
+function updateParticles(dt){
+  particles.forEach(p=>p.life -= dt);
+  particles = particles.filter(p=>p.life>0);
+}
+
+function addParticle(text, x, y){
+  const wp = toWorld(x, y);
+  addParticle3D(text, wp.x, wp.z);
+}
+
+/* ---------- interaction detection ---------- */
+function findInteractable(){
+  const p = G.player;
+  const range = 26;
+  if(G.scene==='village'){
+    const pc0 = Math.floor(p.x/TILE), pr0 = Math.floor(p.y/TILE);
+    for(const b of G.buildings){
+      if(pc0===b.doorC && pr0===b.doorR) return {type:'door', ref:b};
+    }
+    if(pc0===FOREST_GATE_TILE.c && pr0===FOREST_GATE_TILE.r) return {type:'forestGate'};
+    for(const v of G.villagers){
+      if(G.phase==='night') break;
+      if(Math.hypot(p.x-v.x, p.y-v.y) < range) return {type:'villager', ref:v};
+    }
+    for(const t of G.trees){
+      if(t.shaken) continue;
+      const tx=t.c*TILE+TILE/2, ty=t.r*TILE+TILE/2;
+      if(Math.hypot(p.x-tx,p.y-ty) < range+6) return {type:'tree', ref:t};
+    }
+    for(const sp of G.sparkles){
+      const tx=sp.c*TILE+TILE/2, ty=sp.r*TILE+TILE/2;
+      if(Math.hypot(p.x-tx,p.y-ty) < range) return {type:'sparkle', ref:sp};
+    }
+    for(const b of G.bugs){
+      if(Math.hypot(p.x-b.x,p.y-b.y) < range-4) return {type:'bug', ref:b};
+    }
+    const pc = Math.floor(p.x/TILE), pr = Math.floor(p.y/TILE);
+    if(G.fishSpots.some(f=>f.c===pc&&f.r===pr)) return {type:'fish'};
+  } else if(G.scene==='forest'){
+    const pc0 = Math.floor(p.x/TILE), pr0 = Math.floor(p.y/TILE);
+    if(G.forest && G.forest.zone==='depths'){
+      if(pc0===DEPTHS_DOOR_TILE.c && pr0===DEPTHS_DOOR_TILE.r) return {type:'depthsExit'};
+      if(G.forest.shrine){
+        const sx=G.forest.shrine.c*TILE+TILE/2, sy=G.forest.shrine.r*TILE+TILE/2;
+        if(Math.hypot(p.x-sx,p.y-sy) < range+10) return {type:'shrine', ref:G.forest.shrine};
+      }
+      for(const t of G.forest.ancientTrees){
+        const tx=t.c*TILE+TILE/2, ty=t.r*TILE+TILE/2;
+        if(Math.hypot(p.x-tx,p.y-ty) < range+6) return {type:'depthsMemory', ref:t};
+      }
+      for(const sp of G.forest.sparkles){
+        const tx=sp.c*TILE+TILE/2, ty=sp.r*TILE+TILE/2;
+        if(Math.hypot(p.x-tx,p.y-ty) < range) return {type:'forestSparkle', ref:sp};
+      }
+      return null;
+    }
+    if(pc0===FOREST_EXIT_TILE.c && pr0===FOREST_EXIT_TILE.r) return {type:'forestExit'};
+    if(G.forest){
+      for(const t of G.forest.ancientTrees){
+        const tx=t.c*TILE+TILE/2, ty=t.r*TILE+TILE/2;
+        if(Math.hypot(p.x-tx,p.y-ty) >= range+6) continue;
+        if(t.deepEntrance) return {type:'deepEntrance', ref:t};
+        if(t.shaken) continue;
+        return {type:'ancientTree', ref:t};
+      }
+      for(const t of G.forest.trees){
+        if(t.shaken) continue;
+        const tx=t.c*TILE+TILE/2, ty=t.r*TILE+TILE/2;
+        if(Math.hypot(p.x-tx,p.y-ty) < range+6) return {type:'forestTree', ref:t};
+      }
+      for(const sp of G.forest.sparkles){
+        const tx=sp.c*TILE+TILE/2, ty=sp.r*TILE+TILE/2;
+        if(Math.hypot(p.x-tx,p.y-ty) < range) return {type:'forestSparkle', ref:sp};
+      }
+    }
+  } else {
+    const pc = Math.floor(p.x/TILE), pr = Math.floor(p.y/TILE);
+    if(pc===COLS/2 && pr===ROWS-2) return {type:'exit'};
+    if(pc===1 && pr===1) return {type:'bed'};
+    const furn = G.houseFurniture.find(f=>Math.hypot((f.c*TILE+TILE/2)-p.x,(f.r*TILE+TILE/2)-p.y) < range+16);
+    if(furn && !placementItem && !movingFurniture) return {type:'furniture', ref:furn};
+  }
+  if(G.scene==='house' && (placementItem || movingFurniture)){
+    return {type:'placing'};
+  }
+  return null;
+}
+
+const PROMPT_TEXT = {
+  villager:'話しかける', tree:'木を揺らす', sparkle:'掘る',
+  bug:'捕まえる', fish:'釣る', door:'入る',
+  exit:'村に出る', bed:'眠る', furniture:'動かす・しまう',
+  placing:'空いている場所をタップ（Eでキャンセル）',
+  forestGate:'森の奥へ入る', forestExit:'村へ戻る',
+  forestTree:'木を揺らす', ancientTree:'白い大樹を揺らす', forestSparkle:'掘る',
+  deepEntrance:'白く光る裂け目に入る', depthsExit:'森の入り口へ戻る', shrine:'ほこらに祈りを捧げる',
+  depthsMemory:'そっと触れてみる',
+};
+
+function updatePrompt(){
+  const el = document.getElementById('promptBubble');
+  if(!el) return;
+  if(fishing) return;
+  const it = findInteractable();
+  if(it && PROMPT_TEXT[it.type]){
+    let label = it.type==='door' ? `「${it.ref.name}」に入る` : PROMPT_TEXT[it.type];
+    if(it.type==='bed') label = G.phase==='night' ? '眠る' : 'ひとやすみする';
+    if(it.type==='shrine') label = it.ref.done ? 'ほこらにそっと触れる' : 'ほこらに祈りを捧げる';
+    el.textContent = it.type==='placing' ? label : `▶ ${label}`;
+    el.style.display = 'block';
+  } else {
+    el.style.display = 'none';
+  }
+}
+
+/* ============================================================
+   ACTIONS
+   ============================================================ */
+function doAction(){
+  const it = findInteractable();
+  if(!it) return;
+  const p = G.player;
+  if(it.type==='tree') return shakeTree(it.ref);
+  if(it.type==='sparkle') return digSparkle(it.ref);
+  if(it.type==='bug') return catchBug(it.ref);
+  if(it.type==='fish') return goFishing();
+  if(it.type==='villager') return talkTo(it.ref);
+  if(it.type==='door') return enterBuilding(it.ref);
+  if(it.type==='exit') return exitHouse();
+  if(it.type==='bed') return sleep();
+  if(it.type==='furniture') return openFurnitureMenu(it.ref);
+  if(it.type==='forestGate') return enterForest();
+  if(it.type==='forestExit') return exitForest();
+  if(it.type==='forestTree') return shakeForestTree(it.ref);
+  if(it.type==='ancientTree') return shakeAncientTree(it.ref);
+  if(it.type==='forestSparkle') return digForestSparkle(it.ref);
+  if(it.type==='deepEntrance') return enterDepths();
+  if(it.type==='depthsExit') return exitDepths();
+  if(it.type==='shrine') return prayAtShrine(it.ref);
+  if(it.type==='depthsMemory') return touchMemoryTree(it.ref);
+  if(it.type==='placing'){
+    if(movingFurniture){ movingFurniture=null; showFlavorToast('移動をキャンセルした'); }
+    else if(placementItem){ placementItem=null; showFlavorToast('設置をキャンセルした'); }
+    return;
+  }
+}
+
+function openFurnitureMenu(f){
+  const def = getItemDef(f.itemId);
+  openModal(`
+    <h2>${def?def.icon:'📦'} ${def?def.name:'家具'}</h2>
+    <p class="mdesc">この家具をどうする？</p>
+    <div class="btn-row">
+      <button class="mini-btn buy" id="startMove">🖐️ 動かす</button>
+      <button class="mini-btn" id="doPickup">📦 しまう（持ち物へ）</button>
+      <button class="mini-btn" id="cancelFurnMenu">とじる</button>
+    </div>
+  `);
+  document.getElementById('startMove').onclick = ()=>{
+    closeModal();
+    movingFurniture = f;
+    showFlavorToast('移動先をタップしてね（Eでキャンセル）');
+  };
+  document.getElementById('doPickup').onclick = ()=>{
+    closeModal();
+    pickupFurniture(f);
+  };
+  document.getElementById('cancelFurnMenu').onclick = closeModal;
+}
+
+function addItem(id, n){
+  n = n||1;
+  G.inventory[id] = (G.inventory[id]||0)+n;
+  const def = getItemDef(id);
+  if(def) logAcquire(`${def.icon} ${def.name} ×${n} を入手`);
+}
+
+function logAcquire(text){
+  G.acquireLog.unshift({text, day:G.day});
+  if(G.acquireLog.length>30) G.acquireLog.length = 30;
+  renderAcquireLog();
+}
+
+function renderAcquireLog(){
+  const el = document.getElementById('acquireLog');
+  if(!el) return;
+  if(!G.acquireLog.length){
+    el.innerHTML = '<div class="log-empty">まだ何も入手していません。</div>';
+    return;
+  }
+  el.innerHTML = G.acquireLog.map(e=>`<div class="log-row">${e.text}</div>`).join('');
+}
+
+function shakeTree(tree){
+  tree.shaken = true;
+  const roll = Math.random();
+  let got;
+  if(roll<0.5) got='wood'; else if(roll<0.8) got='apple'; else got='chestnut';
+  addItem(got,1);
+  addParticle(`+1 ${getItemDef(got).icon}`, tree.c*TILE+TILE/2, tree.r*TILE);
+  renderInventoryStrip(); saveGame();
+}
+
+function digSparkle(sp){
+  G.sparkles = G.sparkles.filter(s=>s!==sp);
+  const roll = Math.random();
+  let got, amt=1;
+  if(roll<0.15){ got='gem'; }
+  else if(roll<0.45){ got='fossil'; }
+  else { got=null; amt = 50+Math.floor(Math.random()*50); G.bells += amt; logAcquire(`💰 ${amt}ベル を発見`); }
+  if(got){ addItem(got,1); addParticle(`+1 ${getItemDef(got).icon}`, sp.c*TILE+TILE/2, sp.r*TILE); }
+  else addParticle(`+${amt} 💰`, sp.c*TILE+TILE/2, sp.r*TILE);
+  renderInventoryStrip(); saveGame(); renderGameShellTop();
+}
+
+function catchBug(bug){
+  G.bugs = G.bugs.filter(b=>b!==bug);
+  addItem(bug.type,1);
+  addParticle(`+1 ${getItemDef(bug.type).icon}`, bug.x, bug.y);
+  renderInventoryStrip(); saveGame();
+}
+
+/* ---------- Forest zone actions ---------- */
+let bgmWasPlayingBeforeForest = false;
+function enterForest(){
+  G.forest = generateForestZone();
+  G.forest.paleTimer = 4+Math.random()*4;
+  paleEncounters = [];
+  forestVillagerSightings = [];
+  G.lightGauge = LIGHT_GAUGE_MAX;
+  G.scene = 'forest';
+  G.player.x = FOREST_EXIT_TILE.c*TILE+TILE/2;
+  G.player.y = (FOREST_EXIT_TILE.r-1)*TILE+TILE/2;
+  buildForestGroup();
+  const wrap = document.getElementById('lightGaugeWrap');
+  if(wrap) wrap.style.display = 'block';
+  updateLightGaugeUI();
+  bgmWasPlayingBeforeForest = bgmPlaying;
+  stopBGM();
+  if(G.depthsUnlocked && !G.depthsCompleted){
+    showFlavorToast('森の奥に足を踏み入れた…どこかに、白く光る裂け目があるかもしれない。');
+  } else {
+    showFlavorToast('森の奥に足を踏み入れた…灯りが尽きる前に村へ戻ろう。');
+  }
+}
+
+function exitForest(){
+  G.scene = 'village';
+  G.player.x = FOREST_GATE_TILE.c*TILE+TILE/2;
+  G.player.y = (FOREST_GATE_TILE.r+1)*TILE+TILE/2;
+  const wrap = document.getElementById('lightGaugeWrap');
+  if(wrap) wrap.style.display = 'none';
+  paleEncounters.forEach(p=>forestGroup && forestGroup.remove(p.mesh));
+  paleEncounters = [];
+  forestVillagerSightings.forEach(s=>forestGroup && forestGroup.remove(s.mesh));
+  forestVillagerSightings = [];
+  if(bgmWasPlayingBeforeForest){
+    const activeId = currentBgmSongId();
+    const song = activeId ? G.songs.find(s=>s.id===activeId) : null;
+    if(song) startBGM(song);
+  }
+  saveGame();
+}
+
+function returnFromForestOutOfLight(){
+  showFlavorToast('灯りが白く尽きて…気づけば村への道を歩いていた。');
+  exitForest();
+}
+
+/* ---------- 森の最奥 ---------- */
+function enterDepths(){
+  G.forest = generateDepthsZone();
+  G.forest.paleTimer = 3+Math.random()*2;
+  paleEncounters.forEach(p=>forestGroup && forestGroup.remove(p.mesh));
+  paleEncounters = [];
+  forestVillagerSightings.forEach(s=>forestGroup && forestGroup.remove(s.mesh));
+  forestVillagerSightings = [];
+  G.lightGauge = LIGHT_GAUGE_MAX;
+  G.player.x = DEPTHS_DOOR_TILE.c*TILE+TILE/2;
+  G.player.y = (DEPTHS_DOOR_TILE.r+1)*TILE+TILE/2;
+  buildForestGroup();
+  updateLightGaugeUI();
+  showFlavorToast('空気が変わった。ここだけ、時間の流れ方が違う気がする。');
+}
+
+function exitDepths(){
+  G.forest = generateForestZone();
+  G.forest.paleTimer = 4+Math.random()*4;
+  paleEncounters.forEach(p=>forestGroup && forestGroup.remove(p.mesh));
+  paleEncounters = [];
+  forestVillagerSightings.forEach(s=>forestGroup && forestGroup.remove(s.mesh));
+  forestVillagerSightings = [];
+  G.lightGauge = Math.min(LIGHT_GAUGE_MAX, G.lightGauge+30);
+  G.player.x = FOREST_GATE_TILE.c*TILE+TILE/2;
+  G.player.y = (FOREST_GATE_TILE.r+2)*TILE+TILE/2;
+  buildForestGroup();
+  updateLightGaugeUI();
+  showFlavorToast('外の空気に戻った。森の音が、また聞こえはじめる。');
+}
+
+function prayAtShrine(ref){
+  if(G.depthsCompleted){
+    showFlavorToast(randPick(DEPTHS_LINES_AFTER));
+    return;
+  }
+  ref.done = true;
+  G.depthsCompleted = true;
+  addItem('ancient_relic', 1);
+  G.popularity += 10;
+  const bonus = 150;
+  G.bells += bonus;
+  logAcquire(`💰 ${bonus}ベル を見つけた`);
+  renderInventoryStrip(); renderGameShellTop(); saveGame();
+  openModal(`
+    <h2>⛩️ 森の最奥で</h2>
+    <p class="mdesc" style="line-height:1.9;">${DEPTHS_CLIMAX_TEXT}</p>
+    <p class="mdesc">🌌「最奥のかけら」を手に入れた。ふしぎと、怖さより先に、静かな気持ちになった。<br>💰${bonus}ベルを見つけた。人気度も少し上がった気がする。</p>
+    <div class="btn-row" style="margin-top:10px;"><button class="mini-btn buy" id="closeShrine">とじる</button></div>
+  `);
+  document.getElementById('closeShrine').onclick = closeModal;
+}
+
+const DEPTHS_MEMORY_LINES = [
+  '……ここで、よく手をつないで歩いていたような気がする。',
+  '木の根元に、小さな石が積まれていた。誰かがずっと大事にしていたもののようだった。',
+  '「またね」と、誰かが言った気がした。誰に向けた言葉かは分からない。',
+  '木の幹に、小さな傷がいくつも並んでいた。背比べの跡のように見えた。',
+  '遠くで、誰かが笑った。悲しい笑い方ではなかった。',
+  '足元に、小さな花が一輪だけ咲いていた。',
+  'ここだけ、時間がゆっくり流れているような気がした。',
+];
+function touchMemoryTree(ref){
+  if(ref.usedThisVisit){
+    showFlavorToast('さっきと同じ、静かな気配がした。');
+    return;
+  }
+  ref.usedThisVisit = true;
+  showFlavorToast(randPick(DEPTHS_MEMORY_LINES));
+  if(Math.random()<0.4){
+    const got = randPick(['glowstone','ancient_wood']);
+    addItem(got,1);
+    addParticle(`+1 ${getItemDef(got).icon}`, G.player.x, G.player.y);
+    renderInventoryStrip(); saveGame();
+  }
+}
+
+function showFlavorToast(text){
+  const el = document.getElementById('toastBubble');
+  if(!el) return;
+  el.textContent = text;
+  el.style.display = 'block';
+  clearTimeout(window.__toastTimer);
+  window.__toastTimer = setTimeout(()=>{ el.style.display='none'; }, 2400);
+}
+
+function shakeForestTree(tree){
+  tree.shaken = true;
+  const roll = Math.random();
+  let got;
+  if(roll<0.35) got='wood'; else if(roll<0.6) got='chestnut'; else if(roll<0.85) got='mushroom'; else got='glowstone';
+  addItem(got,1);
+  addParticle(`+1 ${getItemDef(got).icon}`, tree.c*TILE+TILE/2, tree.r*TILE);
+  renderInventoryStrip(); saveGame();
+}
+
+function shakeAncientTree(tree){
+  tree.shaken = true;
+  const roll = Math.random();
+  let got;
+  if(roll<0.4) got='ancient_wood'; else if(roll<0.7) got='glowstone'; else got='gem';
+  const n = 1+Math.floor(Math.random()*2);
+  addItem(got,n);
+  addParticle(`+${n} ${getItemDef(got).icon}`, tree.c*TILE+TILE/2, tree.r*TILE);
+  renderInventoryStrip(); saveGame();
+}
+
+function digForestSparkle(sp){
+  G.forest.sparkles = G.forest.sparkles.filter(s=>s!==sp);
+  const roll = Math.random();
+  let got, amt=1;
+  if(roll<0.3){ got='gem'; }
+  else if(roll<0.6){ got='glowstone'; }
+  else if(roll<0.85){ got='fossil'; }
+  else { got=null; amt = 80+Math.floor(Math.random()*70); G.bells += amt; logAcquire(`💰 ${amt}ベル を発見`); }
+  if(got){ addItem(got,1); addParticle(`+1 ${getItemDef(got).icon}`, sp.c*TILE+TILE/2, sp.r*TILE); }
+  else addParticle(`+${amt} 💰`, sp.c*TILE+TILE/2, sp.r*TILE);
+  renderInventoryStrip(); saveGame(); renderGameShellTop();
+}
+
+let fishing = false;
+function goFishing(){
+  if(fishing) return;
+  fishing = true;
+  const el = document.getElementById('promptBubble');
+  if(el){ el.textContent = '……'; el.style.display='block'; }
+  const wait = 700+Math.random()*1200;
+  setTimeout(()=>{
+    if(!fishing) return;
+    if(el){ el.textContent = '❗ 今アクション！'; }
+    let caught=false;
+    const onKey = (e)=>{
+      if(e.code==='Space' || e.code==='KeyE'){ caught=true; finishFishing(true); }
+    };
+    window.addEventListener('keydown', onKey, {once:true});
+    const btn = document.getElementById('btnAction');
+    const onClick = ()=>{ if(!caught){ caught=true; finishFishing(true); } };
+    if(btn) btn.addEventListener('click', onClick, {once:true});
+    setTimeout(()=>{ if(!caught) finishFishing(false); }, 900);
+  }, wait);
+}
+function finishFishing(success){
+  fishing = false;
+  if(success){
+    const table = ['fish_carp','fish_carp','fish_trop','fish_shrimp','fish_junk'];
+    const got = table[Math.floor(Math.random()*table.length)];
+    addItem(got,1);
+    addParticle(`+1 ${getItemDef(got).icon}`, G.player.x, G.player.y-20);
+  } else {
+    addParticle('…にげられた', G.player.x, G.player.y-20);
+  }
+  renderInventoryStrip(); saveGame();
+}
+
+function isRecruited(v){ return G.studio.some(s=>s.id===v.id); }
+function effectiveScoutCost(v){
+  const discount = (G.villagerGifts && G.villagerGifts[v.id]) || 0;
+  return Math.max(15, v.scoutCost - discount);
+}
+
+function talkTo(v){
+  const lineIsRequest = Math.random()<0.3 && !isRecruited(v);
+  let bodyHtml, footHtml='';
+  if(lineIsRequest){
+    const mat = REQUEST_MATERIALS[Math.floor(Math.random()*REQUEST_MATERIALS.length)];
+    const have = (G.inventory[mat]||0)>0;
+    bodyHtml = `${getItemDef(mat).name}${getItemDef(mat).icon} を持ってない？ お礼にベルをあげるよ。`;
+    footHtml = `<div class="btn-row"><button class="mini-btn buy" id="giveBtn" ${have?'':'disabled'}>${getItemDef(mat).icon} わたす</button><button class="mini-btn" id="closeDialogue">とじる</button></div>`;
+    setTimeout(()=>{
+      const gb = document.getElementById('giveBtn');
+      if(gb) gb.onclick = ()=>{
+        G.inventory[mat] -= 1;
+        const reward = 15+Math.floor(Math.random()*20);
+        G.bells += reward;
+        logAcquire(`💰 ${reward}ベル を${v.name}からもらった`);
+        renderInventoryStrip(); renderGameShellTop(); saveGame();
+        showDialogue(v, `ありがとう！ おかげで助かったよ。（+${reward}ベル）`);
+      };
+      const cb = document.getElementById('closeDialogue');
+      if(cb) cb.onclick = closeModal;
+    },0);
+  } else {
+    const line = v.lines[Math.floor(Math.random()*v.lines.length)];
+    bodyHtml = line;
+    if(isRecruited(v)){
+      const bonus = G.villagerStatBonus[v.id] || {tech:0,idea:0,coop:0};
+      const total = bonus.tech+bonus.idea+bonus.coop;
+      const maxedNow = bonus.tech>=VILLAGER_STAT_CAP && bonus.idea>=VILLAGER_STAT_CAP && bonus.coop>=VILLAGER_STAT_CAP;
+      bodyHtml += `<br><span style="font-size:11px;color:#8a7a5f;">（もうスタジオの仲間だね）${total>0?`<br>贈り物ボーナス：💻+${bonus.tech}　📝+${bonus.idea}　🎤+${bonus.coop}${maxedNow?'（もう十分育っている。これ以降の贈り物は人気度に）':''}`:''}</span>`;
+      footHtml = `<div class="btn-row"><button class="mini-btn" id="giftOpenBtn">🎁 贈り物をする</button><button class="mini-btn" id="closeDialogue">とじる</button></div>`;
+    } else {
+      const cost = effectiveScoutCost(v);
+      const can = G.bells >= cost;
+      const discount = (G.villagerGifts && G.villagerGifts[v.id]) || 0;
+      bodyHtml += `<br><span style="font-size:11px;color:#8a7a5f;">${v.roleEmoji} ${v.role}として、こうぼうに誘ってみる？（💰${cost}${discount>0?`　※贈り物で-${discount}済み`:''}）</span>`;
+      footHtml = `<div class="btn-row"><button class="mini-btn buy" id="scoutBtn" ${can?'':'disabled'}>スカウトする</button><button class="mini-btn" id="giftOpenBtn">🎁 贈り物をする</button><button class="mini-btn" id="closeDialogue">とじる</button></div>`;
+    }
+    setTimeout(()=>{
+      const sb = document.getElementById('scoutBtn');
+      if(sb) sb.onclick = ()=>{
+        const cost = effectiveScoutCost(v);
+        if(G.bells < cost) return;
+        G.bells -= cost;
+        G.studio.push({id:v.id, name:v.name, emoji:v.emoji, role:v.role, roleEmoji:v.roleEmoji,
+          personality:v.personality, tech:v.tech, idea:v.idea, coop:v.coop});
+        renderGameShellTop(); saveGame();
+        showDialogue(v, `やった、こうぼうで一緒にやるよ！ よろしくね。`);
+      };
+      const gob = document.getElementById('giftOpenBtn');
+      if(gob) gob.onclick = ()=> renderGiftPicker(v);
+      const cb = document.getElementById('closeDialogue');
+      if(cb) cb.onclick = closeModal;
+    },0);
+  }
+  showDialogueRaw(v, bodyHtml, footHtml);
+}
+
+function renderGiftPicker(v){
+  const recruited = isRecruited(v);
+  const giftable = Object.entries(G.inventory).filter(([id,n])=>n>0 && getItemDef(id) && getItemDef(id).cat!=='furniture');
+  const STAT_CAP = VILLAGER_STAT_CAP;
+  const bonus = G.villagerStatBonus[v.id] || {tech:0,idea:0,coop:0};
+  const maxed = recruited && bonus.tech>=STAT_CAP && bonus.idea>=STAT_CAP && bonus.coop>=STAT_CAP;
+  const rows = giftable.length ? giftable.map(([id,n])=>{
+    const it = getItemDef(id);
+    const rewardText = recruited
+      ? (maxed ? '⭐ 人気度 +1' : '一番低い能力 +1')
+      : `スカウト費用 -${Math.max(5, Math.floor((it.sell||5)*0.8))}`;
+    return `<div class="shop-row">
+      <div class="sr-left"><span class="sr-icon">${it.icon}</span><div><div class="sr-name">${it.name} ×${n}</div><div class="sr-price">${rewardText}</div></div></div>
+      <button class="mini-btn buy" data-gift="${id}">わたす</button>
+    </div>`;
+  }).join('') : '<p class="mdesc">わたせるものが持ち物にありません。</p>';
+  openModal(`
+    <h2>🎁 ${v.name}に贈り物</h2>
+    <p class="mdesc">${recruited ? (maxed ? '能力はもう十分育っているみたい。ここから先の贈り物は、村全体の人気度に変わるよ。' : 'アイテムを渡すと、一番低い能力値が少しだけ伸びるよ（能力ごとに上限あり）。') : 'アイテムをひとつ渡すと、その分だけこうぼうへのスカウト費用が安くなるよ。'}</p>
+    ${rows}
+    <div class="btn-row" style="margin-top:10px;"><button class="mini-btn" id="giftBack">もどる</button></div>
+  `, ()=>talkTo(v));
+  document.querySelectorAll('[data-gift]').forEach(btn=>{
+    btn.onclick = ()=>{
+      const id = btn.dataset.gift;
+      const it = getItemDef(id);
+      if((G.inventory[id]||0)<=0) return;
+      const bank = GIFT_REACTIONS[v.personality] || ['ありがとう。'];
+      if(recruited && maxed){
+        G.inventory[id] -= 1;
+        G.popularity += 1;
+        renderGameShellTop(); renderInventoryStrip(); saveGame();
+        showDialogue(v, `${randPick(bank)}（⭐人気度 +1）`);
+        return;
+      }
+      if(recruited){
+        G.inventory[id] -= 1;
+        if(!G.villagerStatBonus[v.id]) G.villagerStatBonus[v.id] = {tech:0,idea:0,coop:0};
+        const b = G.villagerStatBonus[v.id];
+        const stats = ['tech','idea','coop'];
+        const base = {tech:v.tech,idea:v.idea,coop:v.coop};
+        let target = stats.filter(s=>b[s]<STAT_CAP).sort((a,c)=>(base[a]+b[a])-(base[c]+b[c]))[0];
+        b[target] += 1;
+        renderInventoryStrip(); saveGame();
+        const statLabel = {tech:'💻技術',idea:'📝発想',coop:'🎤協調'}[target];
+        showDialogue(v, `${randPick(bank)}（${statLabel} +1）`);
+      } else {
+        G.inventory[id] -= 1;
+        const discount = Math.max(5, Math.floor((it.sell||5)*0.8));
+        G.villagerGifts[v.id] = (G.villagerGifts[v.id]||0) + discount;
+        renderInventoryStrip(); saveGame();
+        showDialogue(v, `${randPick(bank)}（スカウト費用 -${discount}）`);
+      }
+    };
+  });
+  document.getElementById('giftBack').onclick = ()=> talkTo(v);
+}
+
+function showDialogue(v, text){
+  showDialogueRaw(v, text, `<div class="btn-row"><button class="mini-btn" id="closeDialogue">とじる</button></div>`);
+  setTimeout(()=>{
+    const cb = document.getElementById('closeDialogue');
+    if(cb) cb.onclick = closeModal;
+  },0);
+}
+function showDialogueRaw(v, bodyHtml, footHtml){
+  openModal(`
+    <div class="dialogue-face">${v.emoji}</div>
+    <div class="dialogue-name">${v.name}（${v.personality}）</div>
+    <div class="dialogue-text">${bodyHtml}</div>
+    ${footHtml}
+  `);
+}
+
+function enterBuilding(b){
+  if(b.id==='house') return enterHouse();
+  if(b.id==='shop') return openShop();
+  if(b.id==='workshop') return openWorkshop();
+}
+
+function enterHouse(){
+  G.scene = 'house';
+  G.player.x = (COLS/2)*TILE+TILE/2;
+  G.player.y = (ROWS-2)*TILE - 4;
+}
+function exitHouse(){
+  G.scene = 'village';
+  const hb = G.buildings.find(b=>b.id==='house');
+  G.player.x = hb.doorC*TILE+TILE/2;
+  G.player.y = hb.doorR*TILE+TILE/2+16;
+}
+
+function pickupFurniture(f){
+  G.houseFurniture = G.houseFurniture.filter(x=>x!==f);
+  addItem(f.itemId,1);
+  renderInventoryStrip(); saveGame();
+}
+
+/* ---------- Shop ---------- */
+function openShop(){
+  renderShopModal();
+}
+function renderShopModal(){
+  const buyRows = SHOP_STOCK.map(id=>{
+    const it = getItemDef(id);
+    const req = SHOP_UNLOCKS[id] || 0;
+    const unlocked = G.popularity >= req;
+    const can = unlocked && G.bells >= it.buy;
+    const priceText = unlocked ? `💰${it.buy}` : `🔒 人気度${req}以上で解禁（今：⭐${G.popularity}）`;
+    return `<div class="shop-row">
+      <div class="sr-left"><span class="sr-icon">${unlocked?it.icon:'🔒'}</span><div><div class="sr-name">${unlocked?it.name:'？？？'}</div><div class="sr-price">${priceText}</div></div></div>
+      <button class="mini-btn buy" data-buy="${id}" ${can?'':'disabled'}>買う</button>
+    </div>`;
+  }).join('');
+  const sellable = Object.entries(G.inventory).filter(([id,n])=>n>0 && getItemDef(id) && getItemDef(id).cat!=='furniture');
+  const sellRows = sellable.length ? sellable.map(([id,n])=>{
+    const it = getItemDef(id);
+    return `<div class="shop-row">
+      <div class="sr-left"><span class="sr-icon">${it.icon}</span><div><div class="sr-name">${it.name} ×${n}</div><div class="sr-price">1個 💰${it.sell}</div></div></div>
+      <button class="mini-btn" data-sell="${id}">売る</button>
+    </div>`;
+  }).join('') : '<p style="font-size:12px;color:#a08f6f;">売れるものがありません。</p>';
+
+  openModal(`
+    <h2>🏪 よろず商店</h2>
+    <p class="mdesc">家具は購入すればすぐ持ち物に入る。集めた素材や虫・魚はここで売れるよ。はじめて置いた家具は人気度が上がって、シークレットの品も解禁されていくよ。</p>
+    <h3 style="font-size:13px;margin:10px 0 6px;">買う</h3>
+    ${buyRows}
+    <h3 style="font-size:13px;margin:14px 0 6px;">売る</h3>
+    ${sellRows}
+    <div class="btn-row" style="margin-top:10px;"><button class="mini-btn" id="closeShop">とじる</button></div>
+  `);
+  document.querySelectorAll('[data-buy]').forEach(btn=>{
+    btn.onclick = ()=>{
+      const id = btn.dataset.buy, it = getItemDef(id);
+      const req = SHOP_UNLOCKS[id] || 0;
+      if(G.popularity < req) return;
+      if(G.bells < it.buy) return;
+      G.bells -= it.buy; addItem(id,1);
+      renderGameShellTop(); renderInventoryStrip(); saveGame(); renderShopModal();
+    };
+  });
+  document.querySelectorAll('[data-sell]').forEach(btn=>{
+    btn.onclick = ()=>{
+      const id = btn.dataset.sell, it = getItemDef(id);
+      if((G.inventory[id]||0)<=0) return;
+      G.inventory[id]-=1; G.bells += it.sell;
+      renderGameShellTop(); renderInventoryStrip(); saveGame(); renderShopModal();
+    };
+  });
+  document.getElementById('closeShop').onclick = closeModal;
+}
+
+/* ---------- Workshop ---------- */
+function openWorkshop(){
+  renderWorkshopHome();
+}
+
+function renderWorkshopHome(){
+  openModal(`
+    <h2>🎨 こうぼう</h2>
+    <p class="mdesc">スタジオのなかまと一緒に、本格的な作品づくりに挑戦しよう。素材を使った小物づくりもできる。</p>
+    <div class="shop-row">
+      <div class="sr-left"><span class="sr-icon">🎬</span><div><div class="sr-name">作品をつくる</div><div class="sr-price">スタジオの仲間：${G.studio.length}人／人気度：⭐${G.popularity}</div></div></div>
+      <button class="mini-btn buy" id="goProject">はじめる</button>
+    </div>
+    <div class="shop-row">
+      <div class="sr-left"><span class="sr-icon">🔨</span><div><div class="sr-name">小物をつくる</div><div class="sr-price">素材を組み合わせて家具をつくる</div></div></div>
+      <button class="mini-btn" id="goCraft">ひらく</button>
+    </div>
+    <div class="shop-row">
+      <div class="sr-left"><span class="sr-icon">🎵</span><div><div class="sr-name">曲をつくる</div><div class="sr-price">マス目にメロディを打ち込んで再生できる／保存した曲：${G.songs.length}曲</div></div></div>
+      <button class="mini-btn" id="goSong">ひらく</button>
+    </div>
+    ${G.gallery.length ? `<div class="shop-row"><div class="sr-left"><span class="sr-icon">🖼️</span><div><div class="sr-name">ギャラリー</div><div class="sr-price">これまでの作品：${G.gallery.length}本</div></div></div><button class="mini-btn" id="goGallery">見る</button></div>` : ''}
+    <div class="btn-row" style="margin-top:10px;"><button class="mini-btn" id="closeWorkshop">とじる</button></div>
+  `);
+  document.getElementById('goProject').onclick = renderProjectSelect;
+  document.getElementById('goCraft').onclick = renderCraftModal;
+  document.getElementById('goSong').onclick = renderSongListModal;
+  const gb = document.getElementById('goGallery');
+  if(gb) gb.onclick = renderGalleryModal;
+  document.getElementById('closeWorkshop').onclick = closeModal;
+}
+
+/* ---------- Song Composer ---------- */
+const NOTE_SCALES = {
+  pentatonic: {
+    label: '初心者向け（5音）', shortLabel:'5音',
+    notes: [
+      {name:'ミ', freq:659.25}, {name:'レ', freq:587.33}, {name:'ド', freq:523.25}, {name:'ラ', freq:440.00},
+      {name:'ソ', freq:392.00}, {name:'ミ', freq:329.63}, {name:'レ', freq:293.66}, {name:'ド', freq:261.63},
+    ],
+  },
+  diatonic: {
+    label: '上級者向け（7音・ドレミファソラシド）', shortLabel:'7音',
+    notes: [
+      {name:'ド', freq:523.25}, {name:'シ', freq:493.88}, {name:'ラ', freq:440.00}, {name:'ソ', freq:392.00},
+      {name:'ファ', freq:349.23}, {name:'ミ', freq:329.63}, {name:'レ', freq:293.66}, {name:'ド', freq:261.63},
+    ],
+  },
+};
+function scaleNotes(scaleId){ return (NOTE_SCALES[scaleId]||NOTE_SCALES.pentatonic).notes; }
+const SONG_STEPS = 16;
+const SONG_INSTRUMENTS = [
+  {id:'sine', name:'まる〜い音'}, {id:'triangle', name:'やわらかい音'},
+  {id:'square', name:'ピコピコ音'}, {id:'sawtooth', name:'するどい音'},
+];
+const CHORD_LECTURE = [
+  {name:'ド・ミ・ソ（明るい和音）', rows:[7,5,4], desc:'一番おさまりのいい和音。曲の始まりや終わりに置くと落ち着く。', scale:'pentatonic'},
+  {name:'ラ・ド・ミ（切ない和音）', rows:[3,2,0], desc:'少ししんみりした響き。盛り上がりの後や、しみじみした場面に。', scale:'pentatonic'},
+  {name:'レ・ソ（浮遊感の2音）', rows:[6,4], desc:'2音だけの軽い和音。次の和音へつなぐ「橋」として使いやすい。', scale:'pentatonic'},
+  {name:'ド・ソ（安定の2音）', rows:[7,4], desc:'和音というより土台。メロディの下に敷くと安心感が出る。', scale:'pentatonic'},
+];
+const DRUM_KIT = [
+  {id:'kick', name:'バスドラム'},
+  {id:'snare', name:'スネア'},
+  {id:'hihat', name:'ハイハット'},
+];
+let composerGrid = null, composerDrumGrid = null, composerTempo = 100, composerInstrument = 'sine', composerTitle = '', composerScale = 'pentatonic';
+let composerTimer = null, composerStep = 0;
+let sharedAudioCtx = null;
+
+function getAudioCtx(){
+  if(!sharedAudioCtx) sharedAudioCtx = new (window.AudioContext||window.webkitAudioContext)();
+  if(sharedAudioCtx.state==='suspended') sharedAudioCtx.resume();
+  return sharedAudioCtx;
+}
+function playTone(freq, seconds, type, vol, ctxArg, when){
+  try{
+    const ctx = ctxArg || getAudioCtx();
+    const startAt = when!=null ? when : ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = type || 'sine';
+    osc.frequency.value = freq;
+    const peak = vol!=null ? vol : 0.22;
+    gain.gain.setValueAtTime(0.0001, startAt);
+    gain.gain.exponentialRampToValueAtTime(peak, startAt+0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, startAt+seconds);
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start(startAt);
+    osc.stop(startAt+seconds+0.03);
+  }catch(e){ /* audio unavailable, ignore */ }
+}
+function playDrum(type, vol, ctxArg, when){
+  try{
+    const ctx = ctxArg || getAudioCtx();
+    const startAt = when!=null ? when : ctx.currentTime;
+    const peak = vol!=null ? vol : 0.3;
+    if(type==='kick'){
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(150, startAt);
+      osc.frequency.exponentialRampToValueAtTime(40, startAt+0.15);
+      gain.gain.setValueAtTime(peak, startAt);
+      gain.gain.exponentialRampToValueAtTime(0.0001, startAt+0.2);
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.start(startAt); osc.stop(startAt+0.22);
+    } else if(type==='snare'){
+      const bufferSize = Math.floor(ctx.sampleRate*0.15);
+      const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for(let i=0;i<bufferSize;i++) data[i] = Math.random()*2-1;
+      const noise = ctx.createBufferSource();
+      noise.buffer = buffer;
+      const bandpass = ctx.createBiquadFilter();
+      bandpass.type = 'bandpass'; bandpass.frequency.value = 1800;
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(peak, startAt);
+      gain.gain.exponentialRampToValueAtTime(0.0001, startAt+0.15);
+      noise.connect(bandpass); bandpass.connect(gain); gain.connect(ctx.destination);
+      noise.start(startAt); noise.stop(startAt+0.16);
+    } else if(type==='hihat'){
+      const bufferSize = Math.floor(ctx.sampleRate*0.05);
+      const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for(let i=0;i<bufferSize;i++) data[i] = Math.random()*2-1;
+      const noise = ctx.createBufferSource();
+      noise.buffer = buffer;
+      const highpass = ctx.createBiquadFilter();
+      highpass.type = 'highpass'; highpass.frequency.value = 7000;
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(peak*0.8, startAt);
+      gain.gain.exponentialRampToValueAtTime(0.0001, startAt+0.05);
+      noise.connect(highpass); highpass.connect(gain); gain.connect(ctx.destination);
+      noise.start(startAt); noise.stop(startAt+0.06);
+    }
+  }catch(e){ /* audio unavailable, ignore */ }
+}
+function makeEmptyGrid(){
+  return Array.from({length:8}, ()=>Array(SONG_STEPS).fill(false));
+}
+function makeEmptyDrumGrid(){
+  return Array.from({length:DRUM_KIT.length}, ()=>Array(SONG_STEPS).fill(false));
+}
+
+/* ---------- 曲のダウンロード（WAV書き出し） ---------- */
+function wavWriteString(view, offset, str){
+  for(let i=0;i<str.length;i++) view.setUint8(offset+i, str.charCodeAt(i));
+}
+function audioBufferToWavBlob(buffer){
+  const numChannels = buffer.numberOfChannels;
+  const sampleRate = buffer.sampleRate;
+  const bitDepth = 16;
+  const samples = buffer.getChannelData(0);
+  const dataLength = samples.length * (bitDepth/8);
+  const arrBuffer = new ArrayBuffer(44+dataLength);
+  const view = new DataView(arrBuffer);
+  wavWriteString(view, 0, 'RIFF');
+  view.setUint32(4, 36+dataLength, true);
+  wavWriteString(view, 8, 'WAVE');
+  wavWriteString(view, 12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true); // PCM
+  view.setUint16(22, numChannels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate*numChannels*bitDepth/8, true);
+  view.setUint16(32, numChannels*bitDepth/8, true);
+  view.setUint16(34, bitDepth, true);
+  wavWriteString(view, 36, 'data');
+  view.setUint32(40, dataLength, true);
+  let offset = 44;
+  for(let i=0;i<samples.length;i++, offset+=2){
+    const s = Math.max(-1, Math.min(1, samples[i]));
+    view.setInt16(offset, s<0 ? s*0x8000 : s*0x7FFF, true);
+  }
+  return new Blob([view], {type:'audio/wav'});
+}
+async function exportSongAsWav(song){
+  const OfflineCtx = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+  if(!OfflineCtx) throw new Error('OfflineAudioContext unavailable');
+  const notes = scaleNotes(song.scale);
+  const stepSec = 60/song.tempo/2;
+  const duration = SONG_STEPS*stepSec + 0.5;
+  const sampleRate = 44100;
+  const offlineCtx = new OfflineCtx(1, Math.ceil(sampleRate*duration), sampleRate);
+  for(let step=0; step<SONG_STEPS; step++){
+    const when = step*stepSec;
+    for(let row=0; row<notes.length; row++){
+      if(song.grid[row][step]) playTone(notes[row].freq, stepSec*0.9, song.instrument, 0.5, offlineCtx, when);
+    }
+    if(song.drumGrid){
+      for(let row=0; row<DRUM_KIT.length; row++){
+        if(song.drumGrid[row] && song.drumGrid[row][step]) playDrum(DRUM_KIT[row].id, 0.6, offlineCtx, when);
+      }
+    }
+  }
+  const rendered = await offlineCtx.startRendering();
+  const blob = audioBufferToWavBlob(rendered);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = (song.title || '曲').replace(/[\\/:*?"<>|]/g,'') + '.wav';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url), 3000);
+}
+function stopComposerPlayback(){
+  if(composerTimer){ clearInterval(composerTimer); composerTimer = null; }
+  document.querySelectorAll('.composer-cell.playhead').forEach(c=>c.classList.remove('playhead'));
+}
+function startComposerPlayback(grid, tempo, instrument, scaleId, drumGrid){
+  stopBGM();
+  stopComposerPlayback();
+  const notes = scaleNotes(scaleId || composerScale);
+  const drums = drumGrid || composerDrumGrid;
+  composerStep = 0;
+  const stepSec = 60/tempo/2;
+  composerTimer = setInterval(()=>{
+    document.querySelectorAll('.composer-cell.playhead').forEach(c=>c.classList.remove('playhead'));
+    document.querySelectorAll(`.composer-cell[data-step="${composerStep}"]`).forEach(c=>c.classList.add('playhead'));
+    for(let row=0; row<notes.length; row++){
+      if(grid[row][composerStep]) playTone(notes[row].freq, stepSec*0.9, instrument);
+    }
+    if(drums){
+      for(let row=0; row<DRUM_KIT.length; row++){
+        if(drums[row] && drums[row][composerStep]) playDrum(DRUM_KIT[row].id);
+      }
+    }
+    composerStep = (composerStep+1) % SONG_STEPS;
+  }, stepSec*1000);
+}
+
+/* ---------- BGM (loops a saved song quietly in the background) ---------- */
+let bgmTimer = null, bgmStep = 0, bgmPlaying = false;
+function startBGM(song){
+  if(!song) return;
+  if(G.scene==='forest') return; // 森の奥ではBGMを流さない
+  stopComposerPlayback();
+  stopBGM();
+  const notes = scaleNotes(song.scale);
+  bgmStep = 0;
+  bgmPlaying = true;
+  const stepSec = 60/song.tempo/2;
+  bgmTimer = setInterval(()=>{
+    for(let row=0; row<notes.length; row++){
+      if(song.grid[row][bgmStep]) playTone(notes[row].freq, stepSec*0.85, song.instrument, 0.11);
+    }
+    if(song.drumGrid){
+      for(let row=0; row<DRUM_KIT.length; row++){
+        if(song.drumGrid[row] && song.drumGrid[row][bgmStep]) playDrum(DRUM_KIT[row].id, 0.14);
+      }
+    }
+    bgmStep = (bgmStep+1) % SONG_STEPS;
+  }, stepSec*1000);
+  renderGameShellTop();
+}
+function stopBGM(){
+  if(bgmTimer){ clearInterval(bgmTimer); bgmTimer = null; }
+  bgmPlaying = false;
+  renderGameShellTop();
+}
+
+function currentBgmSongId(){
+  return G.phase==='night' ? G.bgmNightSongId : G.bgmDaySongId;
+}
+function refreshBgmForCurrentPhase(){
+  if(!bgmPlaying) return; // 何も流れていないときは何もしない
+  const id = currentBgmSongId();
+  const song = id ? G.songs.find(s=>s.id===id) : null;
+  if(song) startBGM(song);
+  else stopBGM();
+}
+
+function composerGridHTML(){
+  const notes = scaleNotes(composerScale);
+  return notes.map((note,row)=>`
+    <div class="composer-row">
+      <span class="composer-label">${note.name}</span>
+      ${Array.from({length:SONG_STEPS}, (_,step)=>`<button class="composer-cell${composerGrid[row][step]?' active':''}" data-row="${row}" data-step="${step}"></button>`).join('')}
+    </div>
+  `).join('');
+}
+function composerDrumGridHTML(){
+  return DRUM_KIT.map((d,row)=>`
+    <div class="composer-row">
+      <span class="composer-label">${d.name}</span>
+      ${Array.from({length:SONG_STEPS}, (_,step)=>`<button class="composer-cell drum-cell${composerDrumGrid[row][step]?' active':''}" data-drow="${row}" data-dstep="${step}"></button>`).join('')}
+    </div>
+  `).join('');
+}
+
+let composerEditingSong = null;
+function renderComposer(existingSong){
+  stopComposerPlayback();
+  composerEditingSong = existingSong || null;
+  composerGrid = existingSong ? existingSong.grid.map(r=>[...r]) : makeEmptyGrid();
+  composerDrumGrid = existingSong && existingSong.drumGrid ? existingSong.drumGrid.map(r=>[...r]) : makeEmptyDrumGrid();
+  composerTempo = existingSong ? existingSong.tempo : 100;
+  composerInstrument = existingSong ? existingSong.instrument : 'sine';
+  composerTitle = existingSong ? existingSong.title : '';
+  composerScale = existingSong ? (existingSong.scale || 'pentatonic') : composerScale;
+  renderComposerUI();
+}
+
+function renderComposerUI(){
+  stopComposerPlayback();
+  const backToList = ()=>{ stopComposerPlayback(); renderSongListModal(); };
+  openModal(`
+    <h2>🎵 曲をつくる</h2>
+    <p class="mdesc">マス目をタップして音を置こう。▶で再生できるよ。和音の組み方に迷ったら「和音のコツ」も見てみて。</p>
+    <div class="start-field">
+      <label>曲のタイトル</label>
+      <input id="songTitle" placeholder="れい：村の朝" maxlength="12" value="${composerTitle.replace(/"/g,'&quot;')}">
+    </div>
+    <div class="composer-controls">
+      <label>音階：<select id="songScale">${Object.entries(NOTE_SCALES).map(([id,s])=>`<option value="${id}" ${id===composerScale?'selected':''}>${s.label}</option>`).join('')}</select></label>
+      <label>音色：<select id="songInstrument">${SONG_INSTRUMENTS.map(ins=>`<option value="${ins.id}" ${ins.id===composerInstrument?'selected':''}>${ins.name}</option>`).join('')}</select></label>
+      <label>速さ：<input type="range" id="songTempo" min="60" max="180" step="10" value="${composerTempo}"><span id="songTempoVal">${composerTempo}</span></label>
+    </div>
+    <div id="composerGridWrap">${composerGridHTML()}</div>
+    <p class="mdesc" style="margin:10px 0 4px;">🥁 ドラム</p>
+    <div id="composerDrumWrap">${composerDrumGridHTML()}</div>
+    <div class="btn-row" style="margin-top:12px;">
+      <button class="mini-btn buy" id="songPlay">▶ 再生</button>
+      <button class="mini-btn" id="songStop">■ 停止</button>
+      <button class="mini-btn buy" id="songSave">💾 保存</button>
+    </div>
+    <div class="btn-row" style="margin-top:8px;">
+      <button class="mini-btn" id="songLecture">🎓 和音のコツ</button>
+      <button class="mini-btn" id="songBack">もどる</button>
+    </div>
+  `, backToList);
+
+  document.getElementById('composerGridWrap').addEventListener('click', (e)=>{
+    const cell = e.target.closest('.composer-cell');
+    if(!cell) return;
+    const row = Number(cell.dataset.row), step = Number(cell.dataset.step);
+    composerGrid[row][step] = !composerGrid[row][step];
+    cell.classList.toggle('active');
+  });
+  document.getElementById('composerDrumWrap').addEventListener('click', (e)=>{
+    const cell = e.target.closest('.composer-cell');
+    if(!cell) return;
+    const row = Number(cell.dataset.drow), step = Number(cell.dataset.dstep);
+    composerDrumGrid[row][step] = !composerDrumGrid[row][step];
+    cell.classList.toggle('active');
+  });
+  document.getElementById('songTitle').oninput = (e)=>{ composerTitle = e.target.value; };
+  document.getElementById('songScale').onchange = (e)=>{
+    composerScale = e.target.value;
+    stopComposerPlayback();
+    renderComposerUI();
+  };
+  document.getElementById('songInstrument').onchange = (e)=>{ composerInstrument = e.target.value; };
+  document.getElementById('songTempo').oninput = (e)=>{
+    composerTempo = Number(e.target.value);
+    document.getElementById('songTempoVal').textContent = composerTempo;
+    if(composerTimer) startComposerPlayback(composerGrid, composerTempo, composerInstrument, composerScale);
+  };
+  document.getElementById('songPlay').onclick = ()=> startComposerPlayback(composerGrid, composerTempo, composerInstrument, composerScale);
+  document.getElementById('songStop').onclick = stopComposerPlayback;
+  document.getElementById('songLecture').onclick = ()=> renderChordLecture();
+  document.getElementById('songSave').onclick = ()=>{
+    const title = document.getElementById('songTitle').value.trim() || '無題の曲';
+    const hasNote = composerGrid.some(row=>row.some(v=>v)) || composerDrumGrid.some(row=>row.some(v=>v));
+    if(!hasNote){ showFlavorToast('まだ音が置かれていないみたい。'); return; }
+    if(composerEditingSong){
+      composerEditingSong.title = title; composerEditingSong.grid = composerGrid.map(r=>[...r]);
+      composerEditingSong.tempo = composerTempo; composerEditingSong.instrument = composerInstrument;
+      composerEditingSong.scale = composerScale; composerEditingSong.drumGrid = composerDrumGrid.map(r=>[...r]);
+    } else {
+      G.songs.push({
+        id:'song_'+Date.now()+'_'+Math.floor(Math.random()*1000),
+        title, grid: composerGrid.map(r=>[...r]), tempo: composerTempo, instrument: composerInstrument, day: G.day,
+        scale: composerScale, drumGrid: composerDrumGrid.map(r=>[...r]),
+      });
+      G.popularity += 2;
+    }
+    saveGame();
+    showFlavorToast(`🎵「${title}」を保存した！`);
+    stopComposerPlayback();
+    renderSongListModal();
+  };
+  document.getElementById('songBack').onclick = backToList;
+}
+
+function renderChordLecture(backFn){
+  stopComposerPlayback();
+  stopBGM();
+  const back = backFn || renderComposerUI;
+  openModal(`
+    <h2>🎓 和音のコツ</h2>
+    <p class="mdesc">同じマス（同じタイミング）に複数の音を置くと「和音」になるよ。まずは下の組み合わせをきいてみよう。</p>
+    ${CHORD_LECTURE.map((c,i)=>`
+      <div class="song-row">
+        <div class="sr-left"><span class="sr-icon">🎹</span><div><div class="sr-name">${c.name}</div><div class="sr-price">${c.desc}</div></div></div>
+        <button class="mini-btn buy" data-chord="${i}">きく</button>
+      </div>
+    `).join('')}
+    <p class="mdesc" style="margin-top:10px;line-height:1.8;">💡 コツ<br>
+    ・和音は曲の「始まり」と「終わり」に置くと落ち着いて聞こえるよ。<br>
+    ・全部のマスを音で埋めず、あえて何も置かないマスを作るとリズムが生まれるよ。<br>
+    ・このマス目は「ヨナ抜き音階」という、どの音を組み合わせても大きく外れにくい音階でできているから、まずは気軽にいろいろ重ねてみて大丈夫。</p>
+    <div class="btn-row" style="margin-top:10px;"><button class="mini-btn buy" id="lectureBack">もどる</button></div>
+  `, back);
+  document.querySelectorAll('[data-chord]').forEach(btn=>{
+    btn.onclick = ()=>{
+      const chord = CHORD_LECTURE[Number(btn.dataset.chord)];
+      chord.rows.forEach(r=>playTone(scaleNotes(chord.scale)[r].freq, 0.9, composerInstrument));
+    };
+  });
+  document.getElementById('lectureBack').onclick = back;
+}
+
+function renderSongListModal(){
+  stopComposerPlayback();
+  const rows = [...G.songs].reverse().map(s=>{
+    const isDayBGM = G.bgmDaySongId===s.id;
+    const isNightBGM = G.bgmNightSongId===s.id;
+    const badge = (isDayBGM?' ☀️':'') + (isNightBGM?' 🌙':'');
+    return `
+    <div class="song-row">
+      <div class="sr-left"><span class="sr-icon">🎼</span><div><div class="sr-name">${s.title}${badge}</div><div class="sr-price">${s.day}日目につくった曲・${(NOTE_SCALES[s.scale||'pentatonic']||NOTE_SCALES.pentatonic).shortLabel}</div></div></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;">
+        <button class="mini-btn buy" data-play="${s.id}">▶</button>
+        <button class="mini-btn" data-edit="${s.id}">編集</button>
+        <button class="mini-btn ${isDayBGM?'buy':''}" data-bgmday="${s.id}">${isDayBGM?'☀️昼BGM解除':'☀️昼BGMにする'}</button>
+        <button class="mini-btn ${isNightBGM?'buy':''}" data-bgmnight="${s.id}">${isNightBGM?'🌙夜BGM解除':'🌙夜BGMにする'}</button>
+        <button class="mini-btn" data-download="${s.id}">⬇️</button>
+        <button class="mini-btn" data-del="${s.id}">削除</button>
+      </div>
+    </div>
+  `;}).join('');
+  openModal(`
+    <h2>🎼 マイソング</h2>
+    <p class="mdesc">今までにつくった曲の一覧。タップで聴きなおせる。昼BGM・夜BGMをそれぞれ設定でき、時間帯が変わると自動で切り替わるよ（森の奥では鳴らないよ）。</p>
+    ${rows || '<p class="mdesc">まだ曲がありません。</p>'}
+    <div class="btn-row" style="margin-top:10px;">
+      <button class="mini-btn buy" id="songNew">＋ 新しい曲をつくる</button>
+      <button class="mini-btn" id="lectureFromList">🎓 和音のコツ</button>
+    </div>
+    <div class="btn-row" style="margin-top:8px;"><button class="mini-btn" id="closeSongList">とじる</button></div>
+  `);
+  document.getElementById('songNew').onclick = ()=> renderComposer(null);
+  document.getElementById('lectureFromList').onclick = ()=> renderChordLecture(renderSongListModal);
+  document.querySelectorAll('[data-play]').forEach(btn=>{
+    btn.onclick = ()=>{
+      const song = G.songs.find(s=>s.id===btn.dataset.play);
+      if(song) startComposerPlayback(song.grid, song.tempo, song.instrument, song.scale, song.drumGrid);
+    };
+  });
+  document.querySelectorAll('[data-edit]').forEach(btn=>{
+    btn.onclick = ()=>{
+      const song = G.songs.find(s=>s.id===btn.dataset.edit);
+      if(song) renderComposer(song);
+    };
+  });
+  document.querySelectorAll('[data-bgmday]').forEach(btn=>{
+    btn.onclick = ()=>{
+      const id = btn.dataset.bgmday;
+      G.bgmDaySongId = (G.bgmDaySongId===id) ? null : id;
+      saveGame();
+      refreshBgmForCurrentPhase();
+      renderSongListModal();
+    };
+  });
+  document.querySelectorAll('[data-bgmnight]').forEach(btn=>{
+    btn.onclick = ()=>{
+      const id = btn.dataset.bgmnight;
+      G.bgmNightSongId = (G.bgmNightSongId===id) ? null : id;
+      saveGame();
+      refreshBgmForCurrentPhase();
+      renderSongListModal();
+    };
+  });
+  document.querySelectorAll('[data-download]').forEach(btn=>{
+    btn.onclick = async ()=>{
+      const song = G.songs.find(s=>s.id===btn.dataset.download);
+      if(!song) return;
+      const original = btn.textContent;
+      btn.disabled = true; btn.textContent = '…';
+      try{
+        await exportSongAsWav(song);
+      }catch(e){
+        showFlavorToast('ダウンロードに失敗しちゃった。');
+      }
+      btn.disabled = false; btn.textContent = original;
+    };
+  });
+  document.querySelectorAll('[data-del]').forEach(btn=>{
+    btn.onclick = ()=>{
+      const song = G.songs.find(s=>s.id===btn.dataset.del);
+      const title = song ? song.title : 'この曲';
+      openModal(`
+        <h2>🗑️ 曲を削除しますか？</h2>
+        <p class="mdesc">「${title}」を削除すると元に戻せません。</p>
+        <div class="btn-row" style="margin-top:12px;">
+          <button class="mini-btn" id="confirmDelYes" style="background:#FF5C5C;color:#fff;">削除する</button>
+          <button class="mini-btn" id="confirmDelNo">キャンセル</button>
+        </div>
+      `, renderSongListModal);
+      document.getElementById('confirmDelYes').onclick = ()=>{
+        if(G.bgmDaySongId===btn.dataset.del) G.bgmDaySongId=null;
+        if(G.bgmNightSongId===btn.dataset.del) G.bgmNightSongId=null;
+        stopBGM();
+        G.songs = G.songs.filter(s=>s.id!==btn.dataset.del);
+        saveGame();
+        renderSongListModal();
+      };
+      document.getElementById('confirmDelNo').onclick = renderSongListModal;
+    };
+  });
+  document.getElementById('closeSongList').onclick = ()=>{ stopComposerPlayback(); closeModal(); };
+}
+
+/* ---------- Game production wizard ---------- */
+function renderProjectSelect(){
+  if(!G.craftFlow || !G.craftFlow.projectOffer){
+    const others = PROJECTS_BASE.filter(p=>p.name!==G.trendGenre);
+    const shuffled = [...others].sort(()=>Math.random()-0.5).slice(0,3);
+    const trendProj = PROJECTS_BASE.find(p=>p.name===G.trendGenre);
+    const offer = (trendProj ? [trendProj, ...shuffled] : shuffled).sort(()=>Math.random()-0.5);
+    G.craftFlow = { projectOffer: offer, squadIds:[] };
+  }
+  const rows = G.craftFlow.projectOffer.map((proj,i)=>{
+    const isTrend = proj.name === G.trendGenre;
+    const streak = currentStreakBonusFor(proj.name);
+    const badges = [];
+    if(isTrend) badges.push(`<span style="color:#FF7A45;font-weight:700;">🔥流行中！必要能力-${TREND_STAT_DISCOUNT}／売上+${Math.round((TREND_SALES_MUL-1)*100)}%</span>`);
+    if(streak>0) badges.push(`<span style="color:#5C9EFF;font-weight:700;">🔁連続ボーナス+${streak}</span>`);
+    return `
+    <div class="shop-row">
+      <div class="sr-left"><span class="sr-icon">${proj.emoji}</span><div><div class="sr-name">${proj.name}</div><div class="sr-price">必要 技術${proj.tech}／発想${proj.idea}／協調${proj.coop}</div>${badges.length?`<div style="font-size:11px;margin-top:2px;">${badges.join(' ')}</div>`:''}</div></div>
+      <button class="mini-btn buy" data-proj="${i}">選ぶ</button>
+    </div>
+  `;
+  }).join('');
+  openModal(`
+    <h2>🎬 ①企画を選ぶ</h2>
+    <p class="mdesc">今回つくる作品のジャンルを選ぼう。<br>🔥今日の流行ジャンル：<b>${G.trendGenre}</b>（必要能力が下がり、売上も上がる）</p>
+    ${rows}
+    <div class="btn-row" style="margin-top:10px;"><button class="mini-btn" id="backHome">もどる</button></div>
+  `);
+  document.querySelectorAll('[data-proj]').forEach(btn=>{
+    btn.onclick = ()=>{
+      G.craftFlow.project = G.craftFlow.projectOffer[Number(btn.dataset.proj)];
+      G.craftFlow.squadIds = [];
+      renderStyleSelect();
+    };
+  });
+  document.getElementById('backHome').onclick = renderWorkshopHome;
+}
+
+/* ---------- Step 2: production style ---------- */
+function renderStyleSelect(){
+  const proj = G.craftFlow.project;
+  const rows = PRODUCTION_STYLES.map((st,i)=>`
+    <div class="shop-row">
+      <div class="sr-left"><span class="sr-icon">${st.emoji}</span><div><div class="sr-name">${st.name}</div><div class="sr-price">${st.desc}</div></div></div>
+      <button class="mini-btn buy" data-style="${i}">選ぶ</button>
+    </div>
+  `).join('');
+  openModal(`
+    <h2>🎥 ②演出スタイルを選ぶ（${proj.emoji} ${proj.name}）</h2>
+    <p class="mdesc">どう見せるかで、売上と評価のバランスが変わる。</p>
+    ${rows}
+    <div class="btn-row" style="margin-top:10px;"><button class="mini-btn" id="backP">もどる</button></div>
+  `);
+  document.querySelectorAll('[data-style]').forEach(btn=>{
+    btn.onclick = ()=>{
+      G.craftFlow.style = PRODUCTION_STYLES[Number(btn.dataset.style)];
+      renderSquadSelect();
+    };
+  });
+  document.getElementById('backP').onclick = renderProjectSelect;
+}
+
+/* ---------- Step 3: squad ---------- */
+function renderSquadSelect(){
+  const proj = G.craftFlow.project;
+  if(G.studio.length===0){
+    openModal(`
+      <h2>🧑‍🎨 ③チームを選ぶ</h2>
+      <p class="mdesc">まだ誰もスタジオに参加していない。村人に話しかけて「スカウト」してみよう！</p>
+      <div class="btn-row"><button class="mini-btn" id="backHome2">もどる</button></div>
+    `);
+    document.getElementById('backHome2').onclick = renderWorkshopHome;
+    return;
+  }
+  const rows = G.studio.map(m=>{
+    const sel = G.craftFlow.squadIds.includes(m.id);
+    return `<div class="shop-row" style="${sel?'box-shadow:0 0 0 3px #8FBF7F inset;':''}">
+      <div class="sr-left"><span class="sr-icon">${m.emoji}</span><div><div class="sr-name">${m.name}（${m.roleEmoji}${m.role}）</div><div class="sr-price">技${m.tech}／発${m.idea}／協${m.coop}</div></div></div>
+      <button class="mini-btn ${sel?'buy':''}" data-mem="${m.id}">${sel?'選択中':'選ぶ'}</button>
+    </div>`;
+  }).join('');
+  const selectedSquad = G.studio.filter(m=>G.craftFlow.squadIds.includes(m.id));
+  const {techSum, ideaSum, coopSum, synergies} = computeStudioStats(selectedSquad);
+  const synergyLine = synergies.length
+    ? `<div style="margin-top:6px;color:#5C9EFF;font-weight:700;">✨相性コンボ発動：${synergies.map(s=>`${s.label}（${{tech:'技術',idea:'発想',coop:'協調'}[s.stat]}+${s.bonus}）`).join('／')}</div>`
+    : '';
+  openModal(`
+    <h2>🧑‍🎨 ③チームを選ぶ（${proj.emoji} ${proj.name}／${G.craftFlow.style.emoji}${G.craftFlow.style.name}）</h2>
+    <p class="mdesc">最大4人まで選べる。必要 技術${proj.tech}／発想${proj.idea}／協調${proj.coop} に対して、今の合計は 技術${techSum}／発想${ideaSum}／協調${coopSum}（贈り物・経験・相性ボーナス込み）。${synergyLine}</p>
+    ${rows}
+    <div class="btn-row" style="margin-top:10px;">
+      <button class="mini-btn buy" id="nextFocus">次へ（気合を入れる）▶</button>
+      <button class="mini-btn" id="backHome3">もどる</button>
+    </div>
+  `);
+  document.querySelectorAll('[data-mem]').forEach(btn=>{
+    btn.onclick = ()=>{
+      const id = btn.dataset.mem;
+      const idx = G.craftFlow.squadIds.indexOf(id);
+      if(idx>=0) G.craftFlow.squadIds.splice(idx,1);
+      else if(G.craftFlow.squadIds.length<4) G.craftFlow.squadIds.push(id);
+      renderSquadSelect();
+    };
+  });
+  document.getElementById('nextFocus').onclick = renderFocusAllocate;
+  document.getElementById('backHome3').onclick = renderWorkshopHome;
+}
+
+/* ---------- Step 4: focus allocation ---------- */
+function renderFocusAllocate(){
+  if(!G.craftFlow.focusAlloc) G.craftFlow.focusAlloc = {tech:0, idea:0, coop:0};
+  const f = G.craftFlow.focusAlloc;
+  const totalPts = f.tech+f.idea+f.coop;
+  const cost = totalPts*FOCUS_POINT_COST;
+  const proj = G.craftFlow.project;
+  const squad = G.studio.filter(m=>G.craftFlow.squadIds.includes(m.id));
+  const {techSum:baseTechRaw, ideaSum:baseIdeaRaw, coopSum:baseCoopRaw} = computeStudioStats(squad);
+  const isTrend = proj.name === G.trendGenre;
+  const streakBonus = currentStreakBonusFor(proj.name);
+  const baseTech = baseTechRaw + streakBonus, baseIdea = baseIdeaRaw + streakBonus, baseCoop = baseCoopRaw + streakBonus;
+  const discount = isTrend ? TREND_STAT_DISCOUNT : 0;
+  const needTech = Math.max(1, proj.tech - discount), needIdea = Math.max(1, proj.idea - discount), needCoop = Math.max(1, proj.coop - discount);
+
+  const row = (label, key, icon, base, need)=>{
+    const total = base + f[key];
+    const met = total>=need;
+    return `
+    <div class="shop-row">
+      <div class="sr-left"><span class="sr-icon">${icon}</span><div><div class="sr-name">${label} +${f[key]}</div><div class="sr-price" style="color:${met?'#2ED47A':'#FF5C5C'};font-weight:700;">${total} / 必要 ${need}${met?' ✔達成':' ← あと'+(need-total)}</div></div></div>
+      <div class="btn-row" style="margin:0;gap:6px;">
+        <button class="mini-btn" data-foc-minus="${key}" ${f[key]<=0?'disabled':''}>－</button>
+        <button class="mini-btn buy" data-foc-plus="${key}" ${totalPts>=FOCUS_MAX||G.bells<cost+FOCUS_POINT_COST?'disabled':''}>＋</button>
+      </div>
+    </div>`;
+  };
+  const metCount = [baseTech+f.tech>=needTech, baseIdea+f.idea>=needIdea, baseCoop+f.coop>=needCoop].filter(Boolean).length;
+  const starGuess = metCount===3?5 : metCount===2?4 : metCount===1?3 : 2;
+  const bonusNote = [];
+  if(isTrend) bonusNote.push(`🔥流行ジャンルで必要能力-${TREND_STAT_DISCOUNT}`);
+  if(streakBonus>0) bonusNote.push(`🔁連続制作ボーナス+${streakBonus}`);
+  openModal(`
+    <h2>💪 ④気合を入れる</h2>
+    <p class="mdesc">追加の予算を投じて、今回だけ能力値を底上げできる（合計最大${FOCUS_MAX}ポイント）。使った分は制作時に支払う。現在のコスト：💰${cost}<br>
+    <span style="color:#8a7a5f;">「必要」を超えている数が多いほど、作品の評価（★）が上がりやすい。赤字＝まだ足りていない能力を優先しよう。</span>${bonusNote.length?`<br><span style="color:#5C9EFF;font-weight:700;">${bonusNote.join('／')}</span>`:''}</p>
+    ${row('技術に集中','tech','💻', baseTech, needTech)}
+    ${row('発想に集中','idea','📝', baseIdea, needIdea)}
+    ${row('協調に集中','coop','🎤', baseCoop, needCoop)}
+    <p class="mdesc" style="margin-top:8px;">現在の見込み：${'★'.repeat(starGuess)}${'☆'.repeat(5-starGuess)}（本番はここから多少ブレます）</p>
+    <div class="btn-row" style="margin-top:10px;">
+      <button class="mini-btn buy" id="nextTitle">次へ（タイトルを決める）▶</button>
+      <button class="mini-btn" id="backSquad">もどる</button>
+    </div>
+  `);
+  document.querySelectorAll('[data-foc-plus]').forEach(btn=>{
+    btn.onclick = ()=>{
+      const key = btn.dataset.focPlus;
+      const tot = f.tech+f.idea+f.coop;
+      if(tot>=FOCUS_MAX || G.bells<(tot+1)*FOCUS_POINT_COST) return;
+      f[key]++;
+      renderFocusAllocate();
+    };
+  });
+  document.querySelectorAll('[data-foc-minus]').forEach(btn=>{
+    btn.onclick = ()=>{
+      const key = btn.dataset.focMinus;
+      if(f[key]>0) f[key]--;
+      renderFocusAllocate();
+    };
+  });
+  document.getElementById('nextTitle').onclick = renderTitleSelect;
+  document.getElementById('backSquad').onclick = renderSquadSelect;
+}
+
+/* ---------- Step 5: title candidates ---------- */
+function renderTitleSelect(){
+  if(!G.craftFlow.titleCandidates) G.craftFlow.titleCandidates = generateTitleCandidates(G.craftFlow.project.name, 3);
+  const rows = G.craftFlow.titleCandidates.map((t,i)=>`
+    <div class="shop-row">
+      <div class="sr-left"><div><div class="sr-name">${t.title}</div><div class="sr-price">${t.tagline}</div></div></div>
+      <button class="mini-btn buy" data-title="${i}">これに決定</button>
+    </div>
+  `).join('');
+  openModal(`
+    <h2>✏️ ⑤タイトルを選ぶ</h2>
+    <p class="mdesc">3つの候補から、今回の作品のタイトルを選ぼう。</p>
+    ${rows}
+    <div class="btn-row" style="margin-top:10px;"><button class="mini-btn" id="backFocus">もどる</button></div>
+  `);
+  document.querySelectorAll('[data-title]').forEach(btn=>{
+    btn.onclick = ()=>{
+      G.craftFlow.titleChoice = G.craftFlow.titleCandidates[Number(btn.dataset.title)];
+      renderQuirkSelect();
+    };
+  });
+  document.getElementById('backFocus').onclick = renderFocusAllocate;
+}
+
+/* ---------- Step 6: signature scene (quirk) ---------- */
+function renderQuirkSelect(){
+  if(!G.craftFlow.quirkCandidates) G.craftFlow.quirkCandidates = generateQuirkCandidates(G.craftFlow.project.name, 3);
+  const rows = G.craftFlow.quirkCandidates.map((q,i)=>`
+    <div class="shop-row">
+      <div class="sr-left"><div class="sr-name" style="max-width:260px;">${q}</div></div>
+      <button class="mini-btn buy" data-quirk="${i}">これに決定</button>
+    </div>
+  `).join('');
+  openModal(`
+    <h2>🎬 ⑥決めゼリフ・名場面を選ぶ</h2>
+    <p class="mdesc">作品を象徴する一場面を選ぼう。あらすじに反映される。</p>
+    ${rows}
+    <div class="btn-row" style="margin-top:10px;"><button class="mini-btn" id="backTitle">もどる</button></div>
+  `);
+  document.querySelectorAll('[data-quirk]').forEach(btn=>{
+    btn.onclick = ()=>{
+      G.craftFlow.quirkChoice = G.craftFlow.quirkCandidates[Number(btn.dataset.quirk)];
+      renderGambleConfirm();
+    };
+  });
+  document.getElementById('backTitle').onclick = renderTitleSelect;
+}
+
+/* ---------- Step 7: safe vs risky, then produce ---------- */
+function renderGambleConfirm(){
+  const f = G.craftFlow.focusAlloc || {tech:0,idea:0,coop:0};
+  const focusCost = (f.tech+f.idea+f.coop)*FOCUS_POINT_COST;
+  const baseCost = 20;
+  const totalCost = baseCost + focusCost;
+  const canAfford = G.bells >= totalCost;
+  openModal(`
+    <h2>🚦 ⑦制作方針を決める</h2>
+    <p class="mdesc">制作費 合計 💰${totalCost}（基本20＋気合${focusCost}）。仕上げ方を選んで発表しよう。</p>
+    <div class="gamble-box">
+      <div class="gamble-card safe">
+        <h3>🛡️ 堅実に仕上げる</h3>
+        <p>計算通りのクオリティで確実に発表する。</p>
+        <button class="mini-btn buy" id="goSafe" ${canAfford?'':'disabled'}>堅実に発表する</button>
+      </div>
+      <div class="gamble-card risk">
+        <h3>🔥 一か八かに賭ける</h3>
+        <p>${Math.round(GAMBLE_WIN_CHANCE*100)}%で大化け！評価・売上ともに大幅アップ。外すと逆に下がる。</p>
+        <button class="mini-btn buy" id="goRisky" ${canAfford?'':'disabled'}>挑戦して発表する</button>
+      </div>
+    </div>
+    <div class="btn-row" style="margin-top:10px;"><button class="mini-btn" id="backQuirk">もどる</button></div>
+  `);
+  document.getElementById('goSafe').onclick = ()=>produceWork(false);
+  document.getElementById('goRisky').onclick = ()=>produceWork(true);
+  document.getElementById('backQuirk').onclick = renderQuirkSelect;
+}
+
+function currentStreakBonusFor(genreName){
+  if(G.lastGenre === genreName) return Math.min(STREAK_BONUS_CAP, G.genreStreak||0);
+  return 0;
+}
+
+function applyProductionGrowth(squad, project){
+  const req = {tech:project.tech, idea:project.idea, coop:project.coop};
+  const primary = Object.keys(req).reduce((a,b)=>req[a]>=req[b]?a:b);
+  const statLabel = {tech:'💻技術', idea:'📝発想', coop:'🎤協調'}[primary];
+  const grown = [];
+  squad.forEach(m=>{
+    if(!G.villagerStatBonus[m.id]) G.villagerStatBonus[m.id] = {tech:0,idea:0,coop:0};
+    const b = G.villagerStatBonus[m.id];
+    if(b[primary] < VILLAGER_STAT_CAP && Math.random()<0.5){
+      b[primary] += 1;
+      grown.push({name:m.name, statLabel});
+    }
+  });
+  return grown;
+}
+
+function produceWork(gamble){
+  const f = G.craftFlow.focusAlloc || {tech:0,idea:0,coop:0};
+  const focusCost = (f.tech+f.idea+f.coop)*FOCUS_POINT_COST;
+  const totalCost = 20 + focusCost;
+  if(G.bells < totalCost) return;
+  G.bells -= totalCost;
+  const squad = G.studio.filter(m=>G.craftFlow.squadIds.includes(m.id));
+  const project = G.craftFlow.project;
+  const isTrend = project.name === G.trendGenre;
+  const streakBonus = currentStreakBonusFor(project.name);
+  const work = generateVillageWork(project, squad, {
+    style: G.craftFlow.style, focusAlloc: f, titleChoice: G.craftFlow.titleChoice,
+    quirkChoice: G.craftFlow.quirkChoice, gamble, isTrend, streakBonus,
+  });
+  work.growth = applyProductionGrowth(squad, project);
+  if(G.lastGenre === work.genre) G.genreStreak = (G.genreStreak||0)+1;
+  else { G.lastGenre = work.genre; G.genreStreak = 1; }
+  const reactions = runVillagerReactions(work, squad);
+  work.reactions = reactions;
+  G.workDefs[work.id] = {name:work.title, icon:work.emojiCombo.split(' ')[0], cat:'furniture'};
+  addItem(work.id,1);
+  G.gallery.push(work);
+  G.bells += work.sales;
+  logAcquire(`💰 ${work.sales}ベル（売上）を獲得`);
+  G.craftFlow = null;
+  renderInventoryStrip(); renderGameShellTop(); saveGame();
+  renderWorkReveal(work, true);
+}
+
+function runVillagerReactions(work, squad){
+  const squadIds = squad.map(m=>m.id);
+  const judges = VILLAGERS_DEF.filter(v=>!squadIds.includes(v.id));
+  const picked = [...judges].sort(()=>Math.random()-0.5).slice(0, Math.min(3, judges.length));
+  return picked.map(v=>{
+    const stars = Math.max(1, Math.min(5, work.stars + Math.floor(Math.random()*3)-1));
+    G.popularity += stars;
+    const bank = stars>=5?REACTIONS_HIGH:stars<=2?REACTIONS_LOW:REACTIONS_MID;
+    return {name:v.name, emoji:v.emoji, stars, comment:randPick(bank)};
+  });
+}
+
+function workDetailHTML(work){
+  const stars = '★'.repeat(work.stars) + '☆'.repeat(5-work.stars);
+  const scoreClass = work.criticScore>=75?'good':work.criticScore>=50?'mid':'low';
+  const banner = work.gambleResult==='win' ? `<div class="result-banner win">🔥 挑戦、大成功！！</div>` :
+                 work.gambleResult==='lose' ? `<div class="result-banner lose">💥 空回りしてしまった…</div>` : '';
+  const reactions = work.reactions || [];
+  const specialBadges = [];
+  if(work.isTrend) specialBadges.push(`<span style="background:#FF7A45;color:#fff;padding:2px 8px;border-radius:8px;font-size:11px;font-weight:700;">🔥流行ジャンル</span>`);
+  if(work.streakBonus) specialBadges.push(`<span style="background:#5C9EFF;color:#fff;padding:2px 8px;border-radius:8px;font-size:11px;font-weight:700;">🔁連続ボーナス+${work.streakBonus}</span>`);
+  (work.synergies||[]).forEach(sp=> specialBadges.push(`<span style="background:#8FBF7F;color:#fff;padding:2px 8px;border-radius:8px;font-size:11px;font-weight:700;">✨${sp.label}</span>`));
+  const growthLines = (work.growth||[]).map(g=>`📈 ${g.name} の${g.statLabel}が伸びた！`).join('<br>');
+  return `
+    <div class="boxart" style="--genre-color:${work.genreColor};margin:8px 0;">
+      ${work.hypeLabel ? `<div class="boxart-obi">${work.hypeLabel}</div>` : ''}
+      <div class="boxart-code">${work.catalogCode}</div>
+      <div class="boxart-emoji">${work.emojiCombo}</div>
+      <div class="boxart-title">${work.title}</div>
+      <div class="boxart-tagline">${work.tagline}</div>
+      <div class="boxart-genre">${work.genre}／${work.style.emoji}${work.style.name}</div>
+      <div class="boxart-stars">${stars}</div>
+      <div class="boxart-scorerow">
+        <div class="critic-score ${scoreClass}">${work.criticScore}</div>
+        <div class="boxart-reaction">💬 ${work.reaction}</div>
+      </div>
+      <p style="text-align:left;font-size:14.5px;color:#fff;line-height:1.85;background:rgba(0,0,0,.18);padding:12px 14px;border-radius:12px;margin-top:10px;">${work.synopsis}</p>
+      <div class="boxart-meta-grid">
+        <div>🎵 主題歌「${work.themeSong}」<br><span>${work.songCredit}</span></div>
+        <div>⏱️ ボリューム 約${work.playHours}時間</div>
+      </div>
+      ${work.cast.length? `<div class="boxart-cast">出演：${work.cast.join('、')}</div>` : ''}
+    </div>
+    ${banner}
+    ${specialBadges.length?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0;">${specialBadges.join('')}</div>`:''}
+    <p class="mdesc" style="font-size:13.5px;">💰売上 +${work.sales}ベル。おうちに飾れる作品として持ち物に入ったよ。</p>
+    ${growthLines?`<p class="mdesc" style="font-size:13px;color:#2ED47A;font-weight:700;">${growthLines}</p>`:''}
+    <h3 style="font-size:14.5px;margin:12px 0 6px;">村のみんなの感想</h3>
+    ${reactions.map(r=>`<div class="shop-row"><div class="sr-left"><span class="sr-icon">${r.emoji}</span><div><div class="sr-name">${r.name}</div><div class="sr-price">${'★'.repeat(r.stars)}${'☆'.repeat(5-r.stars)}</div></div></div><div style="font-size:13px;color:#8a7a5f;max-width:160px;text-align:right;">${r.comment}</div></div>`).join('')}
+  `;
+}
+
+function renderWorkReveal(work, fromProduction){
+  openModal(`
+    <h2>🎉 作品完成！</h2>
+    ${workDetailHTML(work)}
+    <div class="btn-row" style="margin-top:12px;"><button class="mini-btn buy" id="closeReveal">とじる</button></div>
+  `);
+  document.getElementById('closeReveal').onclick = closeModal;
+}
+
+function renderWorkDetailFromGallery(workId){
+  const work = G.gallery.find(w=>w.id===workId);
+  if(!work) return;
+  openModal(`
+    <h2>📖 作品ページ</h2>
+    ${workDetailHTML(work)}
+    <div class="btn-row" style="margin-top:12px;"><button class="mini-btn" id="backGallery">ギャラリーへもどる</button></div>
+  `);
+  document.getElementById('backGallery').onclick = renderGalleryModal;
+}
+
+function renderGalleryModal(){
+  const rows = [...G.gallery].reverse().map(w=>{
+    const stars = '★'.repeat(w.stars) + '☆'.repeat(5-w.stars);
+    return `<div class="shop-row" style="cursor:pointer;" data-open-work="${w.id}">
+      <div class="sr-left"><span class="sr-icon">${w.emojiCombo.split(' ')[0]}</span><div><div class="sr-name">${w.title}</div><div class="sr-price">${w.genre}／${stars}</div></div></div>
+      <span class="mini-btn">見る</span>
+    </div>`;
+  }).join('');
+  openModal(`
+    <h2>🖼️ ギャラリー</h2>
+    <p class="mdesc">これまでにつくった作品の記録。タップすると作品ページが見られる。総人気度：⭐${G.popularity}</p>
+    ${rows || '<p class="mdesc">まだ作品がありません。</p>'}
+    <div class="btn-row" style="margin-top:10px;"><button class="mini-btn" id="backHome4">もどる</button></div>
+  `);
+  document.querySelectorAll('[data-open-work]').forEach(el=>{
+    el.onclick = ()=>renderWorkDetailFromGallery(el.dataset.openWork);
+  });
+  document.getElementById('backHome4').onclick = renderWorkshopHome;
+}
+
+/* ---------- Simple furniture crafting (materials only) ---------- */
+function renderCraftModal(){
+  const rows = RECIPES.map(rec=>{
+    const it = getItemDef(rec.id);
+    const needText = Object.entries(rec.need).map(([m,n])=>`${getItemDef(m).icon}×${n}`).join(' ');
+    const can = Object.entries(rec.need).every(([m,n])=>(G.inventory[m]||0)>=n);
+    return `<div class="shop-row">
+      <div class="sr-left"><span class="sr-icon">${it.icon}</span><div><div class="sr-name">${it.name}</div><div class="sr-price">必要：${needText}</div></div></div>
+      <button class="mini-btn buy" data-craft="${rec.id}" ${can?'':'disabled'}>つくる</button>
+    </div>`;
+  }).join('');
+  openModal(`
+    <h2>🔨 小物づくり</h2>
+    <p class="mdesc">集めた素材を組み合わせて、ちょっとした家具をつくろう。</p>
+    ${rows}
+    <div class="btn-row" style="margin-top:10px;"><button class="mini-btn" id="backHome5">もどる</button></div>
+  `);
+  document.querySelectorAll('[data-craft]').forEach(btn=>{
+    btn.onclick = ()=>{
+      const rec = RECIPES.find(r=>r.id===btn.dataset.craft);
+      const can = Object.entries(rec.need).every(([m,n])=>(G.inventory[m]||0)>=n);
+      if(!can) return;
+      Object.entries(rec.need).forEach(([m,n])=>{ G.inventory[m]-=n; });
+      addItem(rec.id,1);
+      renderInventoryStrip(); saveGame();
+      openModal(`
+        <h2>✨ できあがり！</h2>
+        <div style="text-align:center;font-size:44px;margin:8px 0;">${getItemDef(rec.id).icon}</div>
+        <div style="text-align:center;font-family:'Zen Maru Gothic';font-weight:900;font-size:16px;margin-bottom:8px;">${getItemDef(rec.id).name}</div>
+        <p class="mdesc" style="text-align:center;">${rec.flavor}</p>
+        <div class="btn-row" style="justify-content:center;"><button class="mini-btn" id="closeWorkshop2">とじる</button></div>
+      `);
+      document.getElementById('closeWorkshop2').onclick = closeModal;
+    };
+  });
+  document.getElementById('backHome5').onclick = renderWorkshopHome;
+}
+
+/* ---------- Sleep / day cycle ---------- */
+function sleep(){
+  if(G.phase==='night') wakeUpToNextDay();
+  else restUntilNight();
+}
+
+function wakeUpToNextDay(){
+  const fs = document.getElementById('fadeScreen');
+  const big = document.getElementById('fadeBig');
+  const sub = document.getElementById('fadeSub');
+  big.textContent = '灯りを消して……';
+  sub.textContent = '';
+  fs.classList.add('show');
+  setTimeout(()=>{
+    G.day += 1;
+    G.phase = 'day';
+    G.phaseElapsed = 0;
+    G.trendGenre = pickNewTrend(G.trendGenre);
+    applyPhaseLighting();
+    refreshBgmForCurrentPhase();
+    spawnDailies(G);
+    G.scene = 'village';
+    const hb = G.buildings.find(b=>b.id==='house');
+    G.player.x = hb.doorC*TILE+TILE/2; G.player.y = hb.doorR*TILE+TILE/2+16;
+    saveGame();
+    big.textContent = `${G.day}日目の朝`;
+    sub.textContent = '今日もいい一日になりますように。';
+    renderGameShellTop();
+    setTimeout(()=>{ fs.classList.remove('show'); }, 1200);
+  }, 1100);
+}
+
+function restUntilNight(){
+  const fs = document.getElementById('fadeScreen');
+  const big = document.getElementById('fadeBig');
+  const sub = document.getElementById('fadeSub');
+  big.textContent = '少し横になって……';
+  sub.textContent = '';
+  fs.classList.add('show');
+  setTimeout(()=>{
+    G.phase = 'night';
+    G.phaseElapsed = 0;
+    applyPhaseLighting();
+    refreshBgmForCurrentPhase();
+    G.scene = 'village';
+    const hb = G.buildings.find(b=>b.id==='house');
+    G.player.x = hb.doorC*TILE+TILE/2; G.player.y = hb.doorR*TILE+TILE/2+16;
+    saveGame();
+    big.textContent = '夜になった';
+    sub.textContent = '村から人の気配が消えている。';
+    renderGameShellTop();
+    setTimeout(()=>{ fs.classList.remove('show'); }, 1200);
+  }, 1100);
+}
+
+/* ============================================================
+   MODAL HELPERS
+   ============================================================ */
+let modalBackHandler = null;
+function openModal(html, backFn){
+  document.getElementById('modalBox').innerHTML = html;
+  document.getElementById('modalOverlay').classList.add('show');
+  modalBackHandler = backFn || null;
+}
+function closeModal(){
+  if(typeof stopComposerPlayback === 'function') stopComposerPlayback();
+  modalBackHandler = null;
+  document.getElementById('modalOverlay').classList.remove('show');
+}
+document.getElementById('modalOverlay').addEventListener('click', (e)=>{
+  if(e.target.id!=='modalOverlay') return;
+  if(modalBackHandler) modalBackHandler();
+  else closeModal();
+});
+
+function renderGameShellTop(){
+  const top = document.querySelector('.hud-top');
+  if(!top) return;
+  const activeId = currentBgmSongId();
+  const bgmSong = activeId ? G.songs.find(s=>s.id===activeId) : null;
+  const inForest = G.scene==='forest';
+  const phaseIcon = G.phase==='night' ? '🌙' : '☀️';
+  const bgmLabel = inForest
+    ? (bgmSong ? `🔇 ${bgmSong.title}（森では停止中）` : `${phaseIcon} BGM未設定`)
+    : (bgmSong ? (bgmPlaying ? `🔊 ${bgmSong.title}` : `🔈 ${bgmSong.title}`) : `${phaseIcon} BGM未設定`);
+  top.innerHTML = `
+    <div class="hud-chip">📅 ${G.day}日目</div>
+    <div class="hud-chip">${G.phase==='night' ? '🌙 夜' : '☀️ 昼'}</div>
+    <div class="hud-chip">💰 ${G.bells} ベル</div>
+    <div class="hud-chip">⭐ 人気度 ${G.popularity}</div>
+    <div class="hud-chip" id="playerChip" style="cursor:pointer;">${G.avatar} ${G.playerName}／${G.villageName}</div>
+    <div class="hud-chip bgm-chip" id="bgmToggleChip" style="cursor:pointer;">${bgmLabel}</div>
+  `;
+  const playerChip = document.getElementById('playerChip');
+  if(playerChip) playerChip.onclick = renderAvatarChangeModal;
+  const bgmChip = document.getElementById('bgmToggleChip');
+  if(bgmChip){
+    bgmChip.onclick = ()=>{
+      if(inForest){ showFlavorToast('森の奥では、BGMは流れないみたい。'); return; }
+      if(!activeId){ openWorkshop(); renderSongListModal(); return; }
+      if(bgmPlaying){ stopBGM(); }
+      else { const song = G.songs.find(s=>s.id===activeId); if(song) startBGM(song); }
+    };
+  }
+}
+
+/* ---------- アバター変更 ---------- */
+function renderAvatarChangeModal(){
+  let selA = G.avatar, selC = G.playerColor;
+  openModal(`
+    <h2>🙂 アバターを変える</h2>
+    <p class="mdesc">見た目と色をあとから変えられるよ。</p>
+    <div class="start-field">
+      <label>アバター</label>
+      <div class="avatar-row" id="avatarChangeRow">
+        ${AVATARS.map(a=>`<button class="avatar-btn ${a===selA?'active':''}" data-a="${a}">${a}</button>`).join('')}
+      </div>
+    </div>
+    <div class="start-field">
+      <label>テーマカラー</label>
+      <div class="avatar-row" id="colorChangeRow">
+        ${PLAYER_COLORS.map(c=>`<button class="avatar-btn ${c===selC?'active':''}" data-c="${c}" style="background:${c};border-color:${c};"></button>`).join('')}
+      </div>
+    </div>
+    <div class="btn-row" style="margin-top:10px;">
+      <button class="mini-btn buy" id="avatarSave">💾 かえる</button>
+      <button class="mini-btn" id="avatarCancel">とじる</button>
+    </div>
+  `);
+  document.querySelectorAll('#avatarChangeRow .avatar-btn').forEach(btn=>{
+    btn.onclick = ()=>{
+      selA = btn.dataset.a;
+      document.querySelectorAll('#avatarChangeRow .avatar-btn').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+    };
+  });
+  document.querySelectorAll('#colorChangeRow .avatar-btn').forEach(btn=>{
+    btn.onclick = ()=>{
+      selC = btn.dataset.c;
+      document.querySelectorAll('#colorChangeRow .avatar-btn').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+    };
+  });
+  document.getElementById('avatarSave').onclick = ()=>{
+    applyAvatarChange(selA, selC);
+    closeModal();
+    showFlavorToast('アバターを変えたよ。');
+  };
+  document.getElementById('avatarCancel').onclick = closeModal;
+}
+
+function applyAvatarChange(avatar, color){
+  G.avatar = avatar;
+  G.playerColor = color;
+  if(playerMesh && scene3d){
+    const oldPos = playerMesh.position.clone();
+    const oldRotY = playerMesh.rotation.y;
+    scene3d.remove(playerMesh);
+    playerMesh = makeCharacterMesh(color);
+    const avatarFace = makeEmojiSprite(avatar, 96);
+    avatarFace.position.set(0,0.5,0.05); avatarFace.scale.set(.85,.85,.85);
+    playerMesh.add(avatarFace);
+    playerMesh.position.copy(oldPos);
+    playerMesh.rotation.y = oldRotY;
+    scene3d.add(playerMesh);
+  }
+  saveGame();
+  renderGameShellTop();
+}
+
+/* ============================================================
+   THREE.JS MINIATURE DIORAMA RENDERING
+   ============================================================ */
+let renderer3d, scene3d, cameraVillage, cameraHouse, cameraForest, activeCamera;
+let hemiLight, dirLight, playerLampLight;
+let villageGroup, houseGroup, forestGroup;
+let playerMesh, villagerMeshes = [], buildingMeshes = [];
+let bugMeshes = [], sparkleMeshes = [], furnitureMeshes = [];
+let forestTreeMeshes = [], forestSparkleMeshes = [];
+let particleSprites = [];
+let paleEncounters = [];
+let forestVillagerSightings = [];
+let floorTileMeshes = [];
+const RENDER_W = 640, RENDER_H = 420;
+
+function toWorld(px, py){
+  return { x: px/TILE - COLS/2, z: py/TILE - ROWS/2 };
+}
+function tileCenterWorld(c, r){
+  return { x: c + 0.5 - COLS/2, z: r + 0.5 - ROWS/2 };
+}
+
+function makeEmojiSprite(text, size){
+  size = size || 64;
+  const cv = document.createElement('canvas');
+  cv.width = size; cv.height = size;
+  const ctx = cv.getContext('2d');
+  ctx.font = (size*0.72)+'px sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(text, size/2, size/2+2);
+  const tex = new THREE.CanvasTexture(cv);
+  const mat = new THREE.SpriteMaterial({map:tex, transparent:true});
+  const spr = new THREE.Sprite(mat);
+  spr.scale.set(0.55,0.55,0.55);
+  return spr;
+}
+
+function makeSpeechBubbleSprite(text){
+  const W = 320, H = 130;
+  const cv = document.createElement('canvas');
+  cv.width = W; cv.height = H;
+  const ctx = cv.getContext('2d');
+  ctx.font = '22px sans-serif';
+  const maxCharsPerLine = 12;
+  const lines = [];
+  let remaining = text;
+  while(remaining.length > 0 && lines.length < 2){
+    lines.push(remaining.slice(0, maxCharsPerLine));
+    remaining = remaining.slice(maxCharsPerLine);
+  }
+  if(remaining.length>0 && lines.length){
+    lines[lines.length-1] = lines[lines.length-1].slice(0,-1)+'…';
+  }
+  const bx=10, by=10, bw=W-20, bh=30+lines.length*30;
+  const r=16;
+  ctx.beginPath();
+  ctx.moveTo(bx+r,by);
+  ctx.arcTo(bx+bw,by,bx+bw,by+bh,r);
+  ctx.arcTo(bx+bw,by+bh,bx,by+bh,r);
+  ctx.arcTo(bx,by+bh,bx,by,r);
+  ctx.arcTo(bx,by,bx+bw,by,r);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(255,255,255,0.94)';
+  ctx.strokeStyle = 'rgba(60,55,48,0.55)';
+  ctx.lineWidth = 3;
+  ctx.fill(); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(bx+bw/2-10, by+bh-1);
+  ctx.lineTo(bx+bw/2, by+bh+16);
+  ctx.lineTo(bx+bw/2+10, by+bh-1);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(255,255,255,0.94)';
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#33302B';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  lines.forEach((ln,i)=> ctx.fillText(ln, bx+bw/2, by+26+i*30));
+  const tex = new THREE.CanvasTexture(cv);
+  const mat = new THREE.SpriteMaterial({map:tex, transparent:true});
+  const spr = new THREE.Sprite(mat);
+  spr.scale.set(1.4, 1.4*(H/W), 1);
+  return spr;
+}
+
+function makeTextSprite(text, color){
+  const cv = document.createElement('canvas');
+  cv.width = 240; cv.height = 60;
+  const ctx = cv.getContext('2d');
+  ctx.font = 'bold 30px sans-serif';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillStyle = color || '#4A3A2A';
+  ctx.fillText(text, 120, 32);
+  const tex = new THREE.CanvasTexture(cv);
+  const mat = new THREE.SpriteMaterial({map:tex, transparent:true});
+  const spr = new THREE.Sprite(mat);
+  spr.scale.set(1.2,0.3,1);
+  return spr;
+}
+
+function tileColor3D(t){
+  if(t===0) return 0xBFE79C;
+  if(t===1) return 0xEAD9AE;
+  if(t===2) return 0x7FCBE0;
+  if(t===4) return 0xBFE79C;
+  return 0xBFE79C;
+}
+
+function villagerBodyColor(id){
+  const map = {moko:'#C79A6B', pyon:'#F7C6D9', konta:'#F0A34E', ponzu:'#DDE4E8', penta:'#4A5A6A'};
+  return map[id] || '#C7B8E8';
+}
+
+function makePaleFigureMesh(){
+  const g = new THREE.Group();
+  const mat = new THREE.MeshStandardMaterial({color:'#F2EFE7', roughness:.7, emissive:'#2A2820', emissiveIntensity:.15});
+  const dress = new THREE.Mesh(new THREE.ConeGeometry(0.17, 0.56, 10), mat);
+  dress.position.y = 0.30;
+  dress.castShadow = true;
+  g.add(dress);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 8), mat);
+  head.position.y = 0.66;
+  head.castShadow = true;
+  g.add(head);
+  const shadowMesh = new THREE.Mesh(new THREE.CircleGeometry(0.22,16),
+    new THREE.MeshBasicMaterial({color:0x000000, transparent:true, opacity:.18}));
+  shadowMesh.rotation.x = -Math.PI/2;
+  shadowMesh.position.y = 0.01;
+  shadowMesh.userData.isShadow = true;
+  g.add(shadowMesh);
+  return g;
+}
+
+function makeCharacterMesh(color){
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.22,12,8),
+    new THREE.MeshStandardMaterial({color, roughness:.6}));
+  body.scale.set(1,0.5,1);
+  body.position.y = 0.11;
+  body.castShadow = true;
+  g.add(body);
+  const shadowMesh = new THREE.Mesh(new THREE.CircleGeometry(0.26,16),
+    new THREE.MeshBasicMaterial({color:0x000000, transparent:true, opacity:.18}));
+  shadowMesh.rotation.x = -Math.PI/2;
+  shadowMesh.position.y = 0.01;
+  shadowMesh.userData.isShadow = true;
+  g.add(shadowMesh);
+  return g;
+}
+
+function applyPhaseLighting(){
+  const night = G.phase==='night';
+  const root = document.documentElement;
+  if(night){
+    root.style.setProperty('--sky1', '#2B3454');
+    root.style.setProperty('--sky2', '#4A5480');
+    root.style.setProperty('--title-color', '#F5EFDC');
+    root.style.setProperty('--title-shadow', 'rgba(20,18,45,.55)');
+    root.style.setProperty('--sub-color', '#B9C6FF');
+  } else {
+    root.style.setProperty('--sky1', '#BEE7F5');
+    root.style.setProperty('--sky2', '#E8F6E0');
+    root.style.setProperty('--title-color', '#8C6230');
+    root.style.setProperty('--title-shadow', '#fff');
+    root.style.setProperty('--sub-color', '#7a9c68');
+  }
+  if(hemiLight){
+    hemiLight.color.setHex(night ? 0x33395C : 0xE8F6FF);
+    hemiLight.groundColor.setHex(night ? 0x1E2438 : 0x8fae6f);
+    hemiLight.intensity = night ? 0.35 : 0.95;
+  }
+  if(dirLight){
+    dirLight.color.setHex(night ? 0x9FB4FF : 0xFFF6E0);
+    dirLight.intensity = night ? 0.22 : 0.85;
+  }
+  if(scene3d) scene3d.background = new THREE.Color(night ? 0x232A45 : 0xffffff);
+  if(playerLampLight) playerLampLight.intensity = night ? 0.9 : 0;
+}
+
+function initThreeScene(){
+  const container = document.getElementById('canvasWrap3d');
+  if(!container || typeof THREE==='undefined') return;
+  scene3d = new THREE.Scene();
+
+  renderer3d = new THREE.WebGLRenderer({antialias:true});
+  renderer3d.setSize(RENDER_W, RENDER_H);
+  renderer3d.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
+  renderer3d.shadowMap.enabled = true;
+  renderer3d.shadowMap.type = THREE.PCFSoftShadowMap;
+  container.innerHTML = '';
+  container.appendChild(renderer3d.domElement);
+
+  cameraVillage = new THREE.PerspectiveCamera(38, RENDER_W/RENDER_H, 0.1, 100);
+  cameraVillage.position.set(0.5, 6.4, 7.9);
+  cameraVillage.lookAt(0.5,0.3,2.5);
+
+  cameraHouse = new THREE.PerspectiveCamera(42, RENDER_W/RENDER_H, 0.1, 100);
+  cameraHouse.position.set(0, 4.4, 3.4);
+  cameraHouse.lookAt(0,0.3,0);
+
+  cameraForest = new THREE.PerspectiveCamera(40, RENDER_W/RENDER_H, 0.1, 100);
+  cameraForest.position.set(0.5, 6.0, 7.9);
+  cameraForest.lookAt(0.5,0.3,2.5);
+
+  activeCamera = cameraVillage;
+
+  hemiLight = new THREE.HemisphereLight(0xE8F6FF, 0x8fae6f, 0.95);
+  scene3d.add(hemiLight);
+  dirLight = new THREE.DirectionalLight(0xFFF6E0, 0.85);
+  dirLight.position.set(6,11,5);
+  dirLight.castShadow = true;
+  dirLight.shadow.mapSize.set(1024,1024);
+  dirLight.shadow.camera.left = -12; dirLight.shadow.camera.right = 12;
+  dirLight.shadow.camera.top = 12; dirLight.shadow.camera.bottom = -12;
+  dirLight.shadow.camera.far = 30;
+  scene3d.add(dirLight);
+  playerLampLight = new THREE.PointLight(0xFFD9A0, 0, 3.2, 2);
+  playerLampLight.position.set(0, 0.6, 0);
+  scene3d.add(playerLampLight);
+  applyPhaseLighting();
+
+  const plinth = new THREE.Mesh(new THREE.CylinderGeometry(11.5,11.8,0.7,40),
+    new THREE.MeshStandardMaterial({color:0xD9B98A, roughness:.9}));
+  plinth.position.y = -0.7; plinth.receiveShadow = true;
+  scene3d.add(plinth);
+  const mound = new THREE.Mesh(new THREE.CylinderGeometry(10.6,10.9,0.5,40),
+    new THREE.MeshStandardMaterial({color:0x9fd68a, roughness:.95}));
+  mound.position.y = -0.28; mound.receiveShadow = true;
+  scene3d.add(mound);
+
+  villageGroup = new THREE.Group();
+  houseGroup = new THREE.Group();
+  forestGroup = new THREE.Group();
+  scene3d.add(villageGroup);
+  scene3d.add(houseGroup);
+  scene3d.add(forestGroup);
+
+  buildVillageGroup();
+  buildHouseGroup();
+  buildForestGroup();
+
+  playerMesh = makeCharacterMesh(G.playerColor||'#FF7A5C');
+  const avatarFace = makeEmojiSprite(G.avatar, 96);
+  avatarFace.position.set(0,0.5,0.05); avatarFace.scale.set(.85,.85,.85);
+  playerMesh.add(avatarFace);
+  scene3d.add(playerMesh);
+
+  wireRaycastClick();
+  updateSceneVisibility();
+}
+
+function buildVillageGroup(){
+  while(villageGroup.children.length) villageGroup.remove(villageGroup.children[0]);
+  buildingMeshes = [];
+
+  for(let r=0;r<ROWS;r++){
+    for(let c=0;c<COLS;c++){
+      const t = G.map[r][c];
+      const h = t===2 ? 0.08 : 0.18;
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.98,h,0.98),
+        new THREE.MeshStandardMaterial({color: tileColor3D(t), roughness:.9}));
+      const pos = tileCenterWorld(c,r);
+      mesh.position.set(pos.x, t===2? -0.05 : h/2 - 0.09, pos.z);
+      mesh.receiveShadow = true;
+      villageGroup.add(mesh);
+      if(t===4){
+        const isSunflower = SUNFLOWER_TILES.some(([sc,sr])=>sc===c && sr===r);
+        const flower = makeEmojiSprite(isSunflower ? '🌻' : '🌼', isSunflower ? 60 : 48);
+        flower.position.set(pos.x, isSunflower ? 0.38 : 0.28, pos.z);
+        const s = isSunflower ? 0.5 : 0.4;
+        flower.scale.set(s, s, s);
+        villageGroup.add(flower);
+      }
+    }
+  }
+  G.trees.forEach(tr=>{
+    const pos = tileCenterWorld(tr.c, tr.r);
+    const g = new THREE.Group();
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.09,0.32,6),
+      new THREE.MeshStandardMaterial({color:0x8B5E3C, roughness:.9}));
+    trunk.position.y = 0.16; trunk.castShadow=true;
+    g.add(trunk);
+    const canopyColor = Math.random()<0.5 ? 0x6FAE5C : 0x5C9E4E;
+    const canopy = new THREE.Mesh(new THREE.IcosahedronGeometry(0.30,0),
+      new THREE.MeshStandardMaterial({color:canopyColor, roughness:.85, flatShading:true}));
+    canopy.position.y = 0.5; canopy.castShadow = true;
+    canopy.scale.setScalar(0.85+Math.random()*0.3);
+    g.add(canopy);
+    g.position.set(pos.x, 0, pos.z);
+    g.rotation.y = Math.random()*Math.PI*2;
+    villageGroup.add(g);
+  });
+  G.buildings.forEach(b=>{
+    const pos = tileCenterWorld(b.c + (b.w-1)/2, b.r + (b.h-1)/2);
+    const g = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.BoxGeometry(b.w*0.82, 0.62, b.h*0.82),
+      new THREE.MeshStandardMaterial({color:b.color, roughness:.75}));
+    body.position.y = 0.31; body.castShadow = true; body.receiveShadow = true;
+    g.add(body);
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(Math.max(b.w,b.h)*0.68, 0.46, 4),
+      new THREE.MeshStandardMaterial({color:0xD9834F, roughness:.8, flatShading:true}));
+    roof.position.y = 0.62+0.23; roof.rotation.y = Math.PI/4; roof.castShadow = true;
+    g.add(roof);
+    const label = makeTextSprite(b.name, '#4A3A2A');
+    label.position.set(0, 1.25, 0);
+    g.add(label);
+    const icon = makeEmojiSprite(b.icon, 64);
+    icon.position.set(0, 0.95, 0.42);
+    g.add(icon);
+    g.position.set(pos.x, 0, pos.z);
+    villageGroup.add(g);
+    buildingMeshes.push(g);
+  });
+
+  villagerMeshes = G.villagers.map(v=>{
+    const g = makeCharacterMesh(villagerBodyColor(v.id));
+    const face = makeEmojiSprite(v.emoji, 96);
+    face.position.set(0,0.5,0.05);
+    face.scale.set(.85,.85,.85);
+    g.add(face);
+    villageGroup.add(g);
+    return g;
+  });
+
+  const gatePos = tileCenterWorld(FOREST_GATE_TILE.c, FOREST_GATE_TILE.r);
+  const gate = new THREE.Group();
+  const postMat = new THREE.MeshStandardMaterial({color:0xD9D3C6, roughness:.8});
+  [-0.35, 0.35].forEach(dx=>{
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.05,0.7,8), postMat);
+    post.position.set(dx, 0.35, 0); post.castShadow = true;
+    gate.add(post);
+  });
+  const beam = new THREE.Mesh(new THREE.BoxGeometry(0.95,0.09,0.09), postMat);
+  beam.position.y = 0.62; gate.add(beam);
+  const label = makeTextSprite('森の奥', '#5A5248');
+  label.position.set(0, 1.0, 0);
+  gate.add(label);
+  const icon = makeEmojiSprite('🕯️', 56);
+  icon.position.set(0, 0.75, 0.3); icon.scale.set(.42,.42,.42);
+  gate.add(icon);
+  gate.position.set(gatePos.x, 0, gatePos.z);
+  villageGroup.add(gate);
+
+  rebuildBugMeshes();
+  rebuildSparkleMeshes();
+}
+
+function buildForestGroup(){
+  if(!forestGroup) return;
+  while(forestGroup.children.length) forestGroup.remove(forestGroup.children[0]);
+  forestTreeMeshes = []; forestSparkleMeshes = [];
+  if(!G.forest) return;
+  const isDepths = G.forest.zone==='depths';
+
+  for(let r=0;r<ROWS;r++){
+    for(let c=0;c<COLS;c++){
+      const t = G.forest.map[r][c];
+      const h = 0.18;
+      const pathColor = isDepths ? 0x6E5C86 : 0xC7BFA8;
+      const floorColor = isDepths ? 0x342A44 : 0x5C6455;
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.98,h,0.98),
+        new THREE.MeshStandardMaterial({color: t===1?pathColor:floorColor, roughness:.95}));
+      const pos = tileCenterWorld(c,r);
+      mesh.position.set(pos.x, h/2-0.09, pos.z);
+      mesh.receiveShadow = true;
+      forestGroup.add(mesh);
+    }
+  }
+  if(isDepths){
+    const doorPos = tileCenterWorld(DEPTHS_DOOR_TILE.c, DEPTHS_DOOR_TILE.r);
+    const doorSpr = makeEmojiSprite('🌲', 56); doorSpr.position.set(doorPos.x,0.35,doorPos.z); doorSpr.scale.set(.42,.42,.42);
+    forestGroup.add(doorSpr);
+  } else {
+    const exitPos = tileCenterWorld(FOREST_EXIT_TILE.c, FOREST_EXIT_TILE.r);
+    const exitSpr = makeEmojiSprite('🏘️', 56); exitSpr.position.set(exitPos.x,0.35,exitPos.z); exitSpr.scale.set(.42,.42,.42);
+    forestGroup.add(exitSpr);
+  }
+
+  const makeTree = (tr, big)=>{
+    const pos = tileCenterWorld(tr.c, tr.r);
+    const g = new THREE.Group();
+    const isEntrance = big && tr.deepEntrance;
+    const scaleMul = (big ? 1.6 : 1) * (isEntrance ? 1.15 : 1);
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.07*scaleMul,0.09*scaleMul,0.32*scaleMul,6),
+      new THREE.MeshStandardMaterial({
+        color: isEntrance ? 0x8C6FE0 : big?0xD9D3C2:0x6B6455,
+        emissive: isEntrance ? 0x5A3FC0 : 0x000000,
+        emissiveIntensity: isEntrance ? 0.7 : 0,
+        roughness:.9,
+      }));
+    trunk.position.y = 0.16*scaleMul; trunk.castShadow=true;
+    g.add(trunk);
+    const canopy = new THREE.Mesh(new THREE.IcosahedronGeometry(0.30*scaleMul,0),
+      new THREE.MeshStandardMaterial({
+        color: isEntrance ? 0xF3EBFF : big?0xEDE9DD:0x5E6653,
+        emissive: isEntrance ? 0xB79CFF : 0x000000,
+        emissiveIntensity: isEntrance ? 0.9 : 0,
+        roughness:.85, flatShading:true,
+      }));
+    canopy.position.y = 0.5*scaleMul; canopy.castShadow = true;
+    g.add(canopy);
+    if(isEntrance){
+      // 足元に光る輪をつくって、遠くからでも分かるようにする
+      const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.5,0.03,20),
+        new THREE.MeshStandardMaterial({color:0xD8C6FF, emissive:0x9B7CFF, emissiveIntensity:0.8, roughness:.6, transparent:true, opacity:.55}));
+      ring.position.y = 0.02;
+      g.add(ring);
+    } else if(big){
+      const glow = makeEmojiSprite('✨', 40);
+      glow.position.y = 0.5*scaleMul+0.3; glow.scale.set(.3,.3,.3);
+      g.add(glow);
+    }
+    g.position.set(pos.x, 0, pos.z);
+    g.rotation.y = Math.random()*Math.PI*2;
+    forestGroup.add(g);
+    return g;
+  };
+  G.forest.trees.forEach(tr=>forestTreeMeshes.push(makeTree(tr,false)));
+  G.forest.ancientTrees.forEach(tr=>forestTreeMeshes.push(makeTree(tr,true)));
+
+  if(isDepths && G.forest.shrine){
+    const sh = G.forest.shrine;
+    const pos = tileCenterWorld(sh.c, sh.r);
+    const g = new THREE.Group();
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(0.22,0.26,0.12,8),
+      new THREE.MeshStandardMaterial({color:0xEDE9DD, roughness:.8}));
+    base.position.y = 0.06; base.castShadow = true;
+    g.add(base);
+    const glowIcon = makeEmojiSprite(sh.done?'🕯️':'✨', 48);
+    glowIcon.position.y = 0.42; glowIcon.scale.set(.36,.36,.36);
+    g.add(glowIcon);
+    g.position.set(pos.x, 0, pos.z);
+    forestGroup.add(g);
+  }
+
+  forestSparkleMeshes = G.forest.sparkles.map(sp=>{
+    const spr = makeEmojiSprite('✨', 56);
+    spr.scale.set(.42,.42,.42);
+    const pos = tileCenterWorld(sp.c, sp.r);
+    spr.position.set(pos.x, 0.35, pos.z);
+    forestGroup.add(spr);
+    return spr;
+  });
+}
+
+function rebuildBugMeshes(){
+  bugMeshes.forEach(m=>villageGroup.remove(m));
+  bugMeshes = G.bugs.map(bug=>{
+    const spr = makeEmojiSprite(getItemDef(bug.type).icon, 56);
+    spr.scale.set(.4,.4,.4);
+    villageGroup.add(spr);
+    return spr;
+  });
+}
+function rebuildSparkleMeshes(){
+  sparkleMeshes.forEach(m=>villageGroup.remove(m));
+  sparkleMeshes = G.sparkles.map(sp=>{
+    const spr = makeEmojiSprite('✨', 56);
+    spr.scale.set(.42,.42,.42);
+    const pos = tileCenterWorld(sp.c, sp.r);
+    spr.position.set(pos.x, 0.35, pos.z);
+    villageGroup.add(spr);
+    return spr;
+  });
+}
+
+function buildHouseGroup(){
+  while(houseGroup.children.length) houseGroup.remove(houseGroup.children[0]);
+  floorTileMeshes = [];
+  for(let r=0;r<ROWS;r++){
+    for(let c=0;c<COLS;c++){
+      const isWall = !inHouseFloor(c,r);
+      const pos = tileCenterWorld(c,r);
+      const h = isWall? 0.9 : 0.16;
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.98,h,0.98),
+        new THREE.MeshStandardMaterial({color: isWall?0xC9A46B:0xF3E3C2, roughness:.9}));
+      mesh.position.set(pos.x, h/2-0.09, pos.z);
+      mesh.receiveShadow = true;
+      if(isWall) mesh.castShadow = true;
+      houseGroup.add(mesh);
+      if(!isWall){ mesh.userData = {c,r}; floorTileMeshes.push(mesh); }
+    }
+  }
+  const doorC = Math.floor(COLS/2), doorR = ROWS-2;
+  const doorPos = tileCenterWorld(doorC, doorR);
+  const doorSpr = makeEmojiSprite('🚪',56); doorSpr.position.set(doorPos.x,0.35,doorPos.z); doorSpr.scale.set(.42,.42,.42);
+  houseGroup.add(doorSpr);
+  const bedPos = tileCenterWorld(1,1);
+  const bedSpr = makeEmojiSprite('🛏️',64); bedSpr.position.set(bedPos.x,0.35,bedPos.z); bedSpr.scale.set(.5,.5,.5);
+  houseGroup.add(bedSpr);
+
+  rebuildFurnitureMeshes();
+}
+
+function rebuildFurnitureMeshes(){
+  furnitureMeshes.forEach(m=>houseGroup.remove(m));
+  furnitureMeshes = G.houseFurniture.map(f=>{
+    const g = new THREE.Group();
+    const pos = tileCenterWorld(f.c, f.r);
+    const isWork = f.itemId.startsWith('work_');
+    const box = new THREE.Mesh(new THREE.BoxGeometry(0.7,0.28,0.7),
+      new THREE.MeshStandardMaterial({color: isWork?0xFFE8B0:0xffffff, roughness:.8}));
+    box.position.y = 0.14; box.castShadow = true; box.receiveShadow = true;
+    g.add(box);
+    const def = getItemDef(f.itemId);
+    const icon = makeEmojiSprite(def?def.icon:'📦', 56);
+    icon.position.y = 0.5; icon.scale.set(.42,.42,.42);
+    g.add(icon);
+    if(isWork && def){
+      const label = makeTextSprite(def.name, '#4A3A2A');
+      label.position.y = 0.82; label.scale.set(0.9,0.24,1);
+      g.add(label);
+    }
+    g.position.set(pos.x, 0, pos.z);
+    houseGroup.add(g);
+    return g;
+  });
+}
+
+function updateSceneVisibility(){
+  if(!villageGroup) return;
+  villageGroup.visible = (G.scene==='village');
+  houseGroup.visible = (G.scene==='house');
+  forestGroup.visible = (G.scene==='forest');
+  activeCamera = G.scene==='village' ? cameraVillage : G.scene==='forest' ? cameraForest : cameraHouse;
+}
+
+function wireRaycastClick(){
+  const raycaster = new THREE.Raycaster();
+  const mouse = new THREE.Vector2();
+  renderer3d.domElement.addEventListener('click', (e)=>{
+    if(G.scene!=='house' || (!placementItem && !movingFurniture)) return;
+    const rect = renderer3d.domElement.getBoundingClientRect();
+    mouse.x = ((e.clientX-rect.left)/rect.width)*2-1;
+    mouse.y = -((e.clientY-rect.top)/rect.height)*2+1;
+    raycaster.setFromCamera(mouse, activeCamera);
+    const hits = raycaster.intersectObjects(floorTileMeshes);
+    if(!hits.length) return;
+    const {c,r} = hits[0].object.userData;
+    if(!inHouseFloor(c,r)) return;
+    if(G.houseFurniture.some(f=>f.c===c&&f.r===r)) return;
+    if(movingFurniture){
+      movingFurniture.c = c; movingFurniture.r = r;
+      movingFurniture = null;
+      saveGame();
+      rebuildFurnitureMeshes();
+      return;
+    }
+    if((G.inventory[placementItem]||0)<=0){ placementItem=null; return; }
+    G.inventory[placementItem]-=1;
+    G.houseFurniture.push({itemId:placementItem, c, r});
+    if(!G.placedFurnitureTypes.includes(placementItem)){
+      G.placedFurnitureTypes.push(placementItem);
+      G.popularity += 1;
+      renderGameShellTop();
+      showFlavorToast(`⭐ 新しい家具で人気度+1（${getItemDef(placementItem).name}）`);
+    }
+    placementItem = null;
+    renderInventoryStrip(); saveGame();
+    rebuildFurnitureMeshes();
+  });
+}
+
+function addParticle3D(text, worldX, worldZ){
+  if(!scene3d) return;
+  const spr = makeTextSprite(text, '#4A3A2A');
+  spr.scale.set(0.7,0.22,1);
+  spr.position.set(worldX, 0.6, worldZ);
+  scene3d.add(spr);
+  particleSprites.push({spr, life:1.1});
+}
+
+function syncThree(){
+  if(!renderer3d) return;
+
+  if(playerMesh){
+    const wp = toWorld(G.player.x, G.player.y);
+    playerMesh.position.set(wp.x, 0, wp.z);
+    if(playerLampLight) playerLampLight.position.set(wp.x, 0.6, wp.z);
+  }
+  G.villagers.forEach((v,i)=>{
+    const mesh = villagerMeshes[i];
+    if(!mesh) return;
+    mesh.visible = G.phase!=='night';
+    if(G.phase==='night') return;
+    const wp = toWorld(v.x, v.y);
+    mesh.position.set(wp.x, 0, wp.z);
+  });
+  if(bugMeshes.length !== G.bugs.length) rebuildBugMeshes();
+  G.bugs.forEach((bug,i)=>{
+    const spr = bugMeshes[i];
+    if(!spr) return;
+    const wp = toWorld(bug.x, bug.y);
+    spr.position.set(wp.x, 0.32 + Math.sin(performance.now()/300+i)*0.05, wp.z);
+  });
+  if(sparkleMeshes.length !== G.sparkles.length) rebuildSparkleMeshes();
+  sparkleMeshes.forEach((spr,i)=>{
+    spr.position.y = 0.32 + Math.sin(performance.now()/260+i)*0.06;
+  });
+  if(G.scene==='forest' && G.forest && forestSparkleMeshes.length !== G.forest.sparkles.length){
+    buildForestGroup();
+  }
+  forestSparkleMeshes.forEach((spr,i)=>{
+    spr.position.y = 0.35 + Math.sin(performance.now()/260+i)*0.06;
+  });
+  if(G.scene==='house' && furnitureMeshes.length !== G.houseFurniture.length) rebuildFurnitureMeshes();
+
+  particleSprites = particleSprites.filter(p=>{
+    p.life -= 1/60;
+    p.spr.position.y += 0.012;
+    p.spr.material.opacity = Math.max(0, p.life);
+    if(p.life<=0){ scene3d.remove(p.spr); return false; }
+    return true;
+  });
+  updatePaleEncounters(1/60);
+  updateForestVillagerSightings(1/60);
+
+  updateSceneVisibility();
+  updateCameraFollow();
+  renderer3d.render(scene3d, activeCamera);
+}
+
+function updateCameraFollow(){
+  if(!activeCamera) return;
+  const wp = toWorld(G.player.x, G.player.y);
+  const offset = G.scene==='house' ? {y:4.4, z:3.4} : G.scene==='forest' ? {y:5.6, z:5.0} : {y:6.4, z:5.4};
+  const targetX = wp.x, targetY = offset.y, targetZ = wp.z + offset.z;
+  const cp = activeCamera.position;
+  cp.x += (targetX - cp.x)*0.08;
+  cp.y += (targetY - cp.y)*0.08;
+  cp.z += (targetZ - cp.z)*0.08;
+  activeCamera.lookAt(wp.x, 0.3, wp.z);
+}
+
+function draw(){
+  syncThree();
+}
+
+
+/* ============================================================
+   HOUSE FURNITURE PLACEMENT ENTRY (from inventory strip)
+   ============================================================ */
+document.addEventListener('click', (e)=>{
+  const item = e.target.closest('.inv-item');
+  if(!item || !G) return;
+  const idx = Array.from(item.parentNode.children).indexOf(item);
+  const entries = Object.entries(G.inventory).filter(([k,v])=>v>0);
+  const [id] = entries[idx] || [];
+  if(!id) return;
+  if(id==='note_page'){
+    openModal(`
+      <h2>📄 白いノートの切れ端</h2>
+      <p class="mdesc" style="font-size:13.5px;line-height:1.9;color:#4b4740;">${randPick(NOTE_FRAGMENTS)}</p>
+      <div class="btn-row" style="margin-top:10px;"><button class="mini-btn" id="closeNoteRead">とじる</button></div>
+    `);
+    document.getElementById('closeNoteRead').onclick = closeModal;
+    return;
+  }
+  if(id==='odd_item'){
+    openModal(`
+      <h2>🎐 誰かの忘れ物</h2>
+      <p class="mdesc" style="font-size:13.5px;line-height:1.9;color:#4b4740;">${randPick(ODD_OBJECT_LINES)}</p>
+      <div class="btn-row" style="margin-top:10px;"><button class="mini-btn" id="closeOddRead">とじる</button></div>
+    `);
+    document.getElementById('closeOddRead').onclick = closeModal;
+    return;
+  }
+  if(G.scene!=='house') return;
+  if(getItemDef(id) && getItemDef(id).cat==='furniture'){
+    placementItem = id;
+    movingFurniture = null;
+  }
+});
+
+/* ============================================================
+   KEYBOARD
+   ============================================================ */
+window.addEventListener('keydown', (e)=>{
+  keys[e.code] = true;
+  if(e.code==='Backquote'){
+    const tag = document.activeElement && document.activeElement.tagName;
+    if(tag==='INPUT' || tag==='TEXTAREA' || tag==='SELECT') return;
+    const p = document.getElementById('devPanel');
+    if(p) p.style.display = (p.style.display==='none' || !p.style.display) ? 'block' : 'none';
+    return;
+  }
+  if(e.code==='Space' || e.code==='KeyE'){
+    const tag = document.activeElement && document.activeElement.tagName;
+    if(tag==='INPUT' || tag==='TEXTAREA' || tag==='SELECT') return; // 入力中はキーを奪わない
+    e.preventDefault();
+    const modalOpen = document.getElementById('modalOverlay').classList.contains('show');
+    if(!modalOpen){ doAction(); return; }
+    const closeBtn = document.getElementById('closeDialogue');
+    if(closeBtn) closeBtn.click();
+  }
+});
+window.addEventListener('keyup', (e)=>{ keys[e.code] = false; });
+
+/* ============================================================
+   DEV PANEL（開発者モード：森の奥イベントを任意発火）
+   ============================================================ */
+function wireDevPanel(){
+  const need = (fn)=>()=>{ if(!G){ return; } fn(); };
+  document.getElementById('devToNight').onclick = need(()=>{
+    G.phase='night'; G.phaseElapsed=0; applyPhaseLighting(); refreshBgmForCurrentPhase(); renderGameShellTop();
+  });
+  document.getElementById('devToDay').onclick = need(()=>{
+    G.phase='day'; G.phaseElapsed=0; applyPhaseLighting(); refreshBgmForCurrentPhase(); renderGameShellTop();
+  });
+  document.getElementById('devToForest').onclick = need(()=>{
+    if(G.scene!=='forest') enterForest();
+  });
+  document.getElementById('devToVillage').onclick = need(()=>{
+    if(G.scene==='forest') exitForest();
+  });
+  document.getElementById('devEvFigure').onclick = need(spawnFigureEncounter);
+  document.getElementById('devEvSound').onclick = need(spawnSoundEvent);
+  document.getElementById('devEvObject').onclick = need(spawnFoundObjectEvent);
+  document.getElementById('devEvDisorient').onclick = need(spawnDisorientEvent);
+  document.getElementById('devEvFlicker').onclick = need(spawnLightFlickerEvent);
+  document.getElementById('devEvVillager').onclick = need(spawnVillagerSightingEvent);
+}
+wireDevPanel();
+
+/* ============================================================
+   INIT
+   ============================================================ */
+renderStart();
+</script>
+</body>
+</html>
