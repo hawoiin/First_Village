@@ -134,12 +134,20 @@
   }
 
   .controls-row{display:flex;justify-content:space-between;align-items:flex-end;margin-top:10px;gap:10px;flex-wrap:wrap;}
-  .dpad{display:grid;grid-template-columns:repeat(3,48px);grid-template-rows:repeat(3,48px);gap:4px;touch-action:none;}
-  .dbtn{
-    background:#fff;border:none;border-radius:12px;font-size:18px;cursor:pointer;
-    box-shadow:0 3px 0 rgba(90,70,40,.2);user-select:none;touch-action:none;
+  .joystick-wrap{width:120px;height:120px;display:flex;align-items:center;justify-content:center;touch-action:none;}
+  .joystick-base{
+    position:relative;width:112px;height:112px;border-radius:50%;
+    background:rgba(255,255,255,.55);border:3px solid rgba(140,98,48,.35);
+    box-shadow:inset 0 3px 8px rgba(90,70,40,.18);touch-action:none;user-select:none;
   }
-  .dbtn:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(90,70,40,.2);}
+  .joystick-knob{
+    position:absolute;width:52px;height:52px;border-radius:50%;
+    left:50%;top:50%;transform:translate(-50%,-50%);
+    background:#fff;border:3px solid var(--wood-d);
+    box-shadow:0 3px 0 rgba(90,70,40,.25);touch-action:none;user-select:none;pointer-events:none;
+    transition:box-shadow .15s ease;
+  }
+  .joystick-base.active .joystick-knob{box-shadow:0 1px 0 rgba(90,70,40,.25);background:#FFF3D6;}
   .right-controls{display:flex;align-items:flex-end;gap:12px;touch-action:none;}
   .run-btn{
     width:56px;height:56px;border-radius:50%;background:#fff;color:var(--wood-d);
@@ -233,6 +241,14 @@
     position:absolute; top:14px; right:-38px; width:150px; text-align:center;
     background:#FF3B5C; color:#fff; font-family:'Zen Maru Gothic'; font-weight:900; font-size:11px;
     padding:4px 0; transform:rotate(40deg); box-shadow:0 2px 4px rgba(0,0,0,.25); letter-spacing:1px;
+  }
+  .boxart-obi.obi-perfect{
+    background:linear-gradient(90deg,#FFD23F,#FF9F6B,#FF4DE1); color:#3a2a12;
+  }
+  .perfect-combo-banner{
+    margin-top:8px;padding:10px 14px;border-radius:12px;
+    background:linear-gradient(135deg,rgba(255,210,63,.28),rgba(255,77,225,.22));
+    border:1px solid rgba(255,210,63,.65);color:#fff;font-size:13.5px;text-align:center;font-weight:700;
   }
   .boxart-code{
     position:absolute; top:8px; left:10px; font-size:9px; color:rgba(255,255,255,.55);
@@ -595,13 +611,61 @@ const PRODUCTION_STYLES = [
   {id:'comedic',    name:'コメディ演出', emoji:'😂', desc:'笑いを散りばめた親しみやすい演出。村人の反応がやわらかくなる。', salesMul:1.0, critMul:1.0, softenReaction:true},
   {id:'hardcore',   name:'ハードコア演出', emoji:'🔥', desc:'硬派でマニア向け。当たり外れが大きいがハマれば強烈。', salesMul:0.85, critMul:1.1, highVariance:true},
 ];
+
+// 会心の組み合わせ：ジャンルと演出スタイルの相性が特に良いペア。★5達成時にだけ特別演出が出る。
+const PERFECT_COMBOS = [
+  {genre:'ホラー',   style:'arthouse', label:'会心の一本：芸術的恐怖', text:'誰も予想しなかった角度から恐怖を描き切った。ただ怖いだけじゃない、忘れられない一本になった。'},
+  {genre:'コメディ', style:'comedic',  label:'会心の一本：完全生粋の笑い', text:'計算し尽くされた掛け合いに、遊んだ人全員が腹を抱えて笑った。'},
+  {genre:'ミステリー', style:'arthouse', label:'会心の一本：静かな謎', text:'説明しすぎない語り口が、かえって深い余韻を残す傑作になった。'},
+  {genre:'ファンタジー', style:'mainstream', label:'会心の一本：王道の輝き', text:'誰もが求めていた「これぞファンタジー」という一本になった。'},
+  {genre:'アクション', style:'hardcore', label:'会心の一本：純度100%', text:'一切の妥協がない硬派な作りに、コアなファンが夢中になった。'},
+  {genre:'恋愛',     style:'mainstream', label:'会心の一本：まっすぐな恋', text:'王道のときめきが、まっすぐ胸に届く一本になった。'},
+  {genre:'ホラー',   style:'hardcore', label:'会心の一本：本気の恐怖', text:'手加減なしの恐怖演出に、プレイヤーが本気で悲鳴をあげた。'},
+  {genre:'コメディ', style:'arthouse', label:'会心の一本：奇妙な笑い', text:'笑っていいのか分からない、不思議な後味の一本に仕上がった。'},
+];
+function findPerfectCombo(genreName, styleId){
+  return PERFECT_COMBOS.find(c=>c.genre===genreName && c.style===styleId) || null;
+}
+
+// 編成時のひとことコメント：性格とジャンルの相性で、雰囲気だけのセリフが変わる（数値効果なし）
+const PERSONALITY_GENRE_FIT = {
+  'のんびり':   ['ノベル','ファンタジー','恋愛'],
+  'げんき':     ['アクション','スポーツ','音楽ゲーム'],
+  'いたずら':   ['ホラー','コメディ','ミステリー'],
+  'マイペース': ['SF','パズル','ファンタジー'],
+  'きれい好き': ['パズル','ミステリー','RPG'],
+};
+const PERSONALITY_FIT_LINES = {
+  'のんびり':   '{genre}かぁ……のんびり考えるの、得意かも。',
+  'げんき':     '{genre}、燃えてきた！全力でいくよ！',
+  'いたずら':   '{genre}か……ちょっと仕掛け、考えちゃおうかな。',
+  'マイペース': '{genre}……うん、自分のペースで楽しめそう。',
+  'きれい好き': '{genre}は、丁寧に作り込みたいところ。得意分野だよ。',
+};
+const PERSONALITY_UNFIT_LINES = {
+  'のんびり':   '{genre}か……ちょっと忙しないかもだけど、頑張ってみる。',
+  'げんき':     '{genre}……うーん、勝手が違うかも？でもやってみる！',
+  'いたずら':   '{genre}かぁ、あんまり悪だくみできなさそうだけど……まあいいか。',
+  'マイペース': '{genre}……急かされそうで、ちょっと苦手かも。',
+  'きれい好き': '{genre}か……几帳面さがどこまで活きるかな。',
+};
+function getPersonalityGenreComment(personality, genreName){
+  const fitList = PERSONALITY_GENRE_FIT[personality] || [];
+  const bank = fitList.includes(genreName) ? PERSONALITY_FIT_LINES : PERSONALITY_UNFIT_LINES;
+  const template = bank[personality];
+  return template ? template.replace('{genre}', genreName) : null;
+}
 const FOCUS_POINT_COST = 8;
 const FOCUS_MAX = 6;
 const GAMBLE_WIN_CHANCE = 0.45;
 const VILLAGER_STAT_CAP = 6; // 贈り物＋制作経験で伸ばせる能力ボーナスの上限（旧:3）
 const STREAK_BONUS_CAP = 3; // 同じジャンルを連続でつくったときの最大ボーナス
-const TREND_STAT_DISCOUNT = 2; // 流行ジャンルは必要能力がこの分だけ下がる
-const TREND_SALES_MUL = 1.3; // 流行ジャンルの売上倍率
+
+// 「新鮮さ」：ランダムな流行ではなく、しばらく作っていないジャンルほど有利になる仕組み
+const FRESH_GAP_HIGH = 5; // これ以上のブランクで「新鮮」扱い
+const FRESH_GAP_MID = 2;  // これ以上のブランクで「少し新鮮」扱い
+const FRESH_DISCOUNT_HIGH = 2, FRESH_SALES_MUL_HIGH = 1.3;
+const FRESH_DISCOUNT_MID = 1, FRESH_SALES_MUL_MID = 1.15;
 
 // 相性コンビ：特定の性格の組み合わせがスタジオにいると能力にボーナスが乗る
 const SYNERGY_PAIRS = [
@@ -614,9 +678,21 @@ function detectSynergies(squad){
   const personalities = squad.map(m=>m.personality);
   return SYNERGY_PAIRS.filter(sp=>personalities.includes(sp.a) && personalities.includes(sp.b));
 }
-function pickNewTrend(prevName){
-  const names = PROJECTS_BASE.map(p=>p.name).filter(n=>n!==prevName);
-  return randPick(names.length ? names : PROJECTS_BASE.map(p=>p.name));
+function freshnessGapFor(genreName){
+  const last = G.genreLastProducedAt[genreName];
+  if(last==null) return 999; // まだ一度も作っていないジャンルは最大の新鮮さ扱い
+  return G.productionCount - last;
+}
+function freshnessInfoFor(genreName){
+  const gap = freshnessGapFor(genreName);
+  if(gap>=FRESH_GAP_HIGH) return {tier:'high', discount:FRESH_DISCOUNT_HIGH, salesMul:FRESH_SALES_MUL_HIGH, label:'🌱新鮮！必要能力-'+FRESH_DISCOUNT_HIGH+'／売上+'+Math.round((FRESH_SALES_MUL_HIGH-1)*100)+'%'};
+  if(gap>=FRESH_GAP_MID) return {tier:'mid', discount:FRESH_DISCOUNT_MID, salesMul:FRESH_SALES_MUL_MID, label:'🌿少し新鮮：必要能力-'+FRESH_DISCOUNT_MID+'／売上+'+Math.round((FRESH_SALES_MUL_MID-1)*100)+'%'};
+  return null;
+}
+function rebuildGenreHistoryFromGallery(){
+  G.productionCount = G.gallery.length;
+  G.genreLastProducedAt = {};
+  G.gallery.forEach((w,idx)=>{ G.genreLastProducedAt[w.genre] = idx+1; });
 }
 
 function randPick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
@@ -660,6 +736,19 @@ function generateTitleCandidates(genreName, n){
     out.push({title, tagline: taglinePool[out.length % taglinePool.length]});
   }
   return out;
+}
+
+const SEQUEL_SUFFIXES = ['2','II','リターンズ','〜再臨〜','〜そして、もう一度〜','外伝','完結編','〜続きの物語〜'];
+function generateSequelTitleCandidates(prevWork, n){
+  const genreName = prevWork.genre;
+  const taglineBank = TAGLINES[genreName] || TAGLINES['ノベル'];
+  const taglinePool = pickNUnique(taglineBank, n);
+  const suffixes = [...SEQUEL_SUFFIXES].sort(()=>Math.random()-0.5).slice(0,n);
+  return suffixes.map((suf,i)=>({
+    title: `${prevWork.title} ${suf}`,
+    tagline: taglinePool[i % taglinePool.length],
+    isSequel: true,
+  }));
 }
 
 function generateQuirkCandidates(genreName, n){
@@ -709,7 +798,7 @@ function generateVillageWork(project, squad, opts){
   const streakBonus = opts.streakBonus||0;
   if(streakBonus){ techSum += streakBonus; ideaSum += streakBonus; coopSum += streakBonus; }
 
-  const discount = opts.isTrend ? TREND_STAT_DISCOUNT : 0;
+  const discount = opts.fresh ? opts.fresh.discount : 0;
   const techMet = techSum>=Math.max(1,project.tech-discount),
         ideaMet = ideaSum>=Math.max(1,project.idea-discount),
         coopMet = coopSum>=Math.max(1,project.coop-discount);
@@ -762,7 +851,7 @@ function generateVillageWork(project, squad, opts){
 
   let sales = stars*22 + Math.floor(Math.random()*10);
   sales = Math.round(sales * (style.salesMul||1));
-  if(opts.isTrend) sales = Math.round(sales * TREND_SALES_MUL);
+  if(opts.fresh) sales = Math.round(sales * opts.fresh.salesMul);
   if(gambleResult==='win') sales = Math.round(sales*1.6);
   if(gambleResult==='lose') sales = Math.round(sales*0.5);
   sales = Math.max(8, sales);
@@ -776,14 +865,16 @@ function generateVillageWork(project, squad, opts){
   const catalogCode = `PP-${String(Math.floor(1000+Math.random()*9000))}`;
   const hypeBank = stars>=5 ? HYPE_HIGH : stars<=2 ? HYPE_LOW : null;
   const hypeLabel = hypeBank ? randPick(hypeBank) : null;
+  const perfectCombo = stars>=5 ? findPerfectCombo(project.name, style.id) : null;
 
   return {
     id:'work_'+Date.now()+'_'+Math.floor(Math.random()*1000),
     title, tagline, stars, criticScore, quote, reaction, synopsis, emojiCombo,
     genre:project.name, genreColor:project.color, sales, style, gambleResult,
-    themeSong, songCredit, playHours, catalogCode, hypeLabel,
+    themeSong, songCredit, playHours, catalogCode, hypeLabel, perfectCombo,
     cast: squad.map(c=>`${c.name}（${c.role}）`),
-    isTrend: !!opts.isTrend, streakBonus, synergies: synergies||[],
+    freshTier: opts.fresh ? opts.fresh.tier : null, streakBonus, synergies: synergies||[],
+    isSequel: !!(opts.titleChoice && opts.titleChoice.isSequel),
   };
 }
 
@@ -874,8 +965,8 @@ function newGame(playerName, villageName, avatar, playerColor){
     villagerGifts:{}, villagerStatBonus:{},
     forest:null, lightGauge:LIGHT_GAUGE_MAX,
     acquireLog:[],
-    trendGenre: PROJECTS_BASE[Math.floor(Math.random()*PROJECTS_BASE.length)].name,
     lastGenre:null, genreStreak:0,
+    productionCount:0, genreLastProducedAt:{},
     loreCount:{note:0, odd:0}, depthsUnlocked:false, depthsCompleted:false,
   };
   spawnDailies(state);
@@ -1094,7 +1185,8 @@ function saveGame(){
       bgmDaySongId:G.bgmDaySongId, bgmNightSongId:G.bgmNightSongId,
       villagerGifts:G.villagerGifts, villagerStatBonus:G.villagerStatBonus,
       phase:G.phase, phaseElapsed:G.phaseElapsed,
-      trendGenre:G.trendGenre, lastGenre:G.lastGenre, genreStreak:G.genreStreak,
+      lastGenre:G.lastGenre, genreStreak:G.genreStreak,
+      productionCount:G.productionCount, genreLastProducedAt:G.genreLastProducedAt,
       loreCount:G.loreCount, depthsUnlocked:G.depthsUnlocked, depthsCompleted:G.depthsCompleted,
     };
     localStorage.setItem('tsukurumura_save', JSON.stringify(slim));
@@ -1167,9 +1259,15 @@ function loadSaveIntoGame(data){
   G.villagerStatBonus = data.villagerStatBonus||{};
   G.phase = data.phase||'day';
   G.phaseElapsed = data.phaseElapsed||0;
-  G.trendGenre = data.trendGenre || G.trendGenre;
   G.lastGenre = data.lastGenre || null;
   G.genreStreak = data.genreStreak || 0;
+  if(data.productionCount != null){
+    G.productionCount = data.productionCount;
+    G.genreLastProducedAt = data.genreLastProducedAt || {};
+  } else {
+    // 既存セーブ互換：新鮮さシステム導入前のセーブは、ギャラリー履歴から作り直す
+    rebuildGenreHistoryFromGallery();
+  }
   // 既存セーブ互換：以前から持っていた分は「手持ち数」を最低ラインとして累計に反映する
   const invNote = (G.inventory && G.inventory['note_page']) || 0;
   const invOdd = (G.inventory && G.inventory['odd_item']) || 0;
@@ -1352,10 +1450,10 @@ function renderGameShell(){
       <div class="prompt-bubble toast-bubble" id="toastBubble"></div>
     </div>
     <div class="controls-row">
-      <div class="dpad">
-        <div></div><button class="dbtn" data-k="up">▲</button><div></div>
-        <button class="dbtn" data-k="left">◀</button><div></div><button class="dbtn" data-k="right">▶</button>
-        <div></div><button class="dbtn" data-k="down">▼</button><div></div>
+      <div class="joystick-wrap" id="joystickWrap">
+        <div class="joystick-base" id="joystickBase">
+          <div class="joystick-knob" id="joystickKnob"></div>
+        </div>
       </div>
       <div class="right-controls">
         <button class="run-btn" id="btnRun">🏃<span>ダッシュ</span></button>
@@ -1367,7 +1465,7 @@ function renderGameShell(){
       <div class="acquire-log-title">📜 入手ログ</div>
       <div class="acquire-log" id="acquireLog"></div>
     </div>
-    <div class="footer-note">画面下のボタン（またはPCなら矢印キー/WASD・Shift・E）で操作／おうちの中で「ベッド」に近づいてアクションすると眠れます</div>
+    <div class="footer-note">ジョイスティックをドラッグ（PCなら矢印キー/WASD・Shift・E）で操作／おうちの中で「ベッド」に近づいてアクションすると眠れます</div>
   `;
   wireControls();
   renderInventoryStrip();
@@ -1385,18 +1483,62 @@ function renderInventoryStrip(){
   }).join('');
 }
 
+let joystickActive = false;
+let joystickVec = {x:0, y:0};
+
 function wireControls(){
-  const dpadMap = {up:'ArrowUp', down:'ArrowDown', left:'ArrowLeft', right:'ArrowRight'};
-  document.querySelectorAll('.dbtn').forEach(btn=>{
-    const key = dpadMap[btn.dataset.k];
-    const press = (e)=>{ e.preventDefault(); keys[key]=true; };
-    const release = (e)=>{ e.preventDefault(); keys[key]=false; };
-    btn.addEventListener('mousedown', press);
-    btn.addEventListener('touchstart', press, {passive:false});
-    btn.addEventListener('mouseup', release);
-    btn.addEventListener('touchend', release, {passive:false});
-    btn.addEventListener('mouseleave', release);
-  });
+  const base = document.getElementById('joystickBase');
+  const knob = document.getElementById('joystickKnob');
+  const wrap = document.getElementById('joystickWrap');
+  if(base && knob && wrap){
+    const RADIUS = 40; // 見た目の台座半径よりわずかに狭く、つまみが枠内に収まるように
+    let activePointerId = null;
+    const setKnob = (dx, dy)=>{
+      knob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+    };
+    const resetKnob = ()=>{
+      setKnob(0,0);
+      joystickActive = false;
+      joystickVec.x = 0; joystickVec.y = 0;
+      base.classList.remove('active');
+    };
+    const updateFromEvent = (clientX, clientY)=>{
+      const rect = base.getBoundingClientRect();
+      const cx = rect.left + rect.width/2, cy = rect.top + rect.height/2;
+      let dx = clientX - cx, dy = clientY - cy;
+      const dist = Math.hypot(dx,dy);
+      const clamped = Math.min(dist, RADIUS);
+      const angle = Math.atan2(dy,dx);
+      const kx = Math.cos(angle)*clamped, ky = Math.sin(angle)*clamped;
+      setKnob(kx, ky);
+      const mag = clamped/RADIUS;
+      joystickVec.x = mag>0.08 ? Math.cos(angle)*mag : 0;
+      joystickVec.y = mag>0.08 ? Math.sin(angle)*mag : 0;
+      joystickActive = mag>0.08;
+      base.classList.toggle('active', joystickActive);
+    };
+    const onDown = (e)=>{
+      e.preventDefault();
+      activePointerId = e.pointerId;
+      base.setPointerCapture && base.setPointerCapture(e.pointerId);
+      updateFromEvent(e.clientX, e.clientY);
+    };
+    const onMove = (e)=>{
+      if(activePointerId===null || e.pointerId!==activePointerId) return;
+      e.preventDefault();
+      updateFromEvent(e.clientX, e.clientY);
+    };
+    const onUp = (e)=>{
+      if(activePointerId!==null && e.pointerId!==activePointerId) return;
+      activePointerId = null;
+      resetKnob();
+    };
+    wrap.addEventListener('pointerdown', onDown, {passive:false});
+    wrap.addEventListener('pointermove', onMove, {passive:false});
+    wrap.addEventListener('pointerup', onUp, {passive:false});
+    wrap.addEventListener('pointercancel', onUp, {passive:false});
+    wrap.addEventListener('pointerleave', (e)=>{ if(e.pointerId===activePointerId) onUp(e); });
+  }
   const runBtn = document.getElementById('btnRun');
   if(runBtn){
     const pressRun = (e)=>{ e.preventDefault(); keys['ShiftLeft']=true; runBtn.classList.add('active'); };
@@ -1688,11 +1830,16 @@ function updateLightGaugeUI(){
 /* ---------- player movement ---------- */
 function updatePlayer(dt){
   const p = G.player;
-  let dx=0, dy=0;
-  if(keys['ArrowUp']||keys['KeyW']) dy-=1;
-  if(keys['ArrowDown']||keys['KeyS']) dy+=1;
-  if(keys['ArrowLeft']||keys['KeyA']) dx-=1;
-  if(keys['ArrowRight']||keys['KeyD']) dx+=1;
+  let dx=0, dy=0, mag=1;
+  if(joystickActive){
+    dx = joystickVec.x; dy = joystickVec.y;
+    mag = Math.min(1, Math.hypot(dx,dy));
+  } else {
+    if(keys['ArrowUp']||keys['KeyW']) dy-=1;
+    if(keys['ArrowDown']||keys['KeyS']) dy+=1;
+    if(keys['ArrowLeft']||keys['KeyA']) dx-=1;
+    if(keys['ArrowRight']||keys['KeyD']) dx+=1;
+  }
   if(dx===0&&dy===0) return;
   const len = Math.hypot(dx,dy)||1;
   dx/=len; dy/=len;
@@ -1700,7 +1847,7 @@ function updatePlayer(dt){
   else if(dy!==0) p.dir = dy>0?'down':'up';
 
   const running = keys['ShiftLeft'] || keys['ShiftRight'];
-  const speed = p.speed * (running ? 1.8 : 1);
+  const speed = p.speed * (running ? 1.8 : 1) * mag;
   const nx = p.x + dx*speed*dt;
   const ny = p.y + dy*speed*dt;
   const r = 11;
@@ -2927,17 +3074,13 @@ function renderSongListModal(){
 /* ---------- Game production wizard ---------- */
 function renderProjectSelect(){
   if(!G.craftFlow || !G.craftFlow.projectOffer){
-    const others = PROJECTS_BASE.filter(p=>p.name!==G.trendGenre);
-    const shuffled = [...others].sort(()=>Math.random()-0.5).slice(0,3);
-    const trendProj = PROJECTS_BASE.find(p=>p.name===G.trendGenre);
-    const offer = (trendProj ? [trendProj, ...shuffled] : shuffled).sort(()=>Math.random()-0.5);
-    G.craftFlow = { projectOffer: offer, squadIds:[] };
+    G.craftFlow = { projectOffer: [...PROJECTS_BASE].sort(()=>Math.random()-0.5).slice(0,4), squadIds:[] };
   }
   const rows = G.craftFlow.projectOffer.map((proj,i)=>{
-    const isTrend = proj.name === G.trendGenre;
+    const fresh = freshnessInfoFor(proj.name);
     const streak = currentStreakBonusFor(proj.name);
     const badges = [];
-    if(isTrend) badges.push(`<span style="color:#FF7A45;font-weight:700;">🔥流行中！必要能力-${TREND_STAT_DISCOUNT}／売上+${Math.round((TREND_SALES_MUL-1)*100)}%</span>`);
+    if(fresh) badges.push(`<span style="color:${fresh.tier==='high'?'#3FA35C':'#7AAE5C'};font-weight:700;">${fresh.label}</span>`);
     if(streak>0) badges.push(`<span style="color:#5C9EFF;font-weight:700;">🔁連続ボーナス+${streak}</span>`);
     return `
     <div class="shop-row">
@@ -2948,7 +3091,7 @@ function renderProjectSelect(){
   }).join('');
   openModal(`
     <h2>🎬 ①企画を選ぶ</h2>
-    <p class="mdesc">今回つくる作品のジャンルを選ぼう。<br>🔥今日の流行ジャンル：<b>${G.trendGenre}</b>（必要能力が下がり、売上も上がる）</p>
+    <p class="mdesc">今回つくる作品のジャンルを選ぼう。<br>🌱しばらく作っていないジャンルほど「新鮮」になり、必要能力が下がって売上も上がるよ。</p>
     ${rows}
     <div class="btn-row" style="margin-top:10px;"><button class="mini-btn" id="backHome">もどる</button></div>
   `);
@@ -3000,9 +3143,13 @@ function renderSquadSelect(){
   }
   const rows = G.studio.map(m=>{
     const sel = G.craftFlow.squadIds.includes(m.id);
-    return `<div class="shop-row" style="${sel?'box-shadow:0 0 0 3px #8FBF7F inset;':''}">
-      <div class="sr-left"><span class="sr-icon">${m.emoji}</span><div><div class="sr-name">${m.name}（${m.roleEmoji}${m.role}）</div><div class="sr-price">技${m.tech}／発${m.idea}／協${m.coop}</div></div></div>
-      <button class="mini-btn ${sel?'buy':''}" data-mem="${m.id}">${sel?'選択中':'選ぶ'}</button>
+    const comment = sel ? getPersonalityGenreComment(m.personality, proj.name) : null;
+    return `<div class="shop-row" style="${sel?'box-shadow:0 0 0 3px #8FBF7F inset;':''}flex-direction:column;align-items:stretch;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div class="sr-left"><span class="sr-icon">${m.emoji}</span><div><div class="sr-name">${m.name}（${m.roleEmoji}${m.role}）</div><div class="sr-price">技${m.tech}／発${m.idea}／協${m.coop}</div></div></div>
+        <button class="mini-btn ${sel?'buy':''}" data-mem="${m.id}">${sel?'選択中':'選ぶ'}</button>
+      </div>
+      ${comment ? `<div style="margin-top:6px;font-size:12.5px;color:#8a7a5f;background:rgba(143,191,127,.12);border-radius:8px;padding:6px 10px;">💬「${comment}」</div>` : ''}
     </div>`;
   }).join('');
   const selectedSquad = G.studio.filter(m=>G.craftFlow.squadIds.includes(m.id));
@@ -3041,10 +3188,10 @@ function renderFocusAllocate(){
   const proj = G.craftFlow.project;
   const squad = G.studio.filter(m=>G.craftFlow.squadIds.includes(m.id));
   const {techSum:baseTechRaw, ideaSum:baseIdeaRaw, coopSum:baseCoopRaw} = computeStudioStats(squad);
-  const isTrend = proj.name === G.trendGenre;
+  const fresh = freshnessInfoFor(proj.name);
   const streakBonus = currentStreakBonusFor(proj.name);
   const baseTech = baseTechRaw + streakBonus, baseIdea = baseIdeaRaw + streakBonus, baseCoop = baseCoopRaw + streakBonus;
-  const discount = isTrend ? TREND_STAT_DISCOUNT : 0;
+  const discount = fresh ? fresh.discount : 0;
   const needTech = Math.max(1, proj.tech - discount), needIdea = Math.max(1, proj.idea - discount), needCoop = Math.max(1, proj.coop - discount);
 
   const row = (label, key, icon, base, need)=>{
@@ -3062,7 +3209,7 @@ function renderFocusAllocate(){
   const metCount = [baseTech+f.tech>=needTech, baseIdea+f.idea>=needIdea, baseCoop+f.coop>=needCoop].filter(Boolean).length;
   const starGuess = metCount===3?5 : metCount===2?4 : metCount===1?3 : 2;
   const bonusNote = [];
-  if(isTrend) bonusNote.push(`🔥流行ジャンルで必要能力-${TREND_STAT_DISCOUNT}`);
+  if(fresh) bonusNote.push(fresh.label);
   if(streakBonus>0) bonusNote.push(`🔁連続制作ボーナス+${streakBonus}`);
   openModal(`
     <h2>💪 ④気合を入れる</h2>
@@ -3099,6 +3246,8 @@ function renderFocusAllocate(){
 
 /* ---------- Step 5: title candidates ---------- */
 function renderTitleSelect(){
+  const lastWork = G.gallery[G.gallery.length-1];
+  const sequelEligible = !!(lastWork && lastWork.genre === G.craftFlow.project.name);
   if(!G.craftFlow.titleCandidates) G.craftFlow.titleCandidates = generateTitleCandidates(G.craftFlow.project.name, 3);
   const rows = G.craftFlow.titleCandidates.map((t,i)=>`
     <div class="shop-row">
@@ -3109,9 +3258,23 @@ function renderTitleSelect(){
   openModal(`
     <h2>✏️ ⑤タイトルを選ぶ</h2>
     <p class="mdesc">3つの候補から、今回の作品のタイトルを選ぼう。</p>
+    ${sequelEligible ? `
+    <div class="shop-row" style="background:#FFF3D6;">
+      <div class="sr-left"><span class="sr-icon">📖</span><div><div class="sr-name">前作「${lastWork.title}」の続編にする</div><div class="sr-price">${G.craftFlow.isSequel?'続編タイトル候補を表示中':'続編タイトルの候補に切り替える'}</div></div></div>
+      <button class="mini-btn ${G.craftFlow.isSequel?'buy':''}" id="toggleSequel">${G.craftFlow.isSequel?'通常候補に戻す':'続編にする'}</button>
+    </div>` : ''}
     ${rows}
     <div class="btn-row" style="margin-top:10px;"><button class="mini-btn" id="backFocus">もどる</button></div>
   `);
+  if(sequelEligible){
+    document.getElementById('toggleSequel').onclick = ()=>{
+      G.craftFlow.isSequel = !G.craftFlow.isSequel;
+      G.craftFlow.titleCandidates = G.craftFlow.isSequel
+        ? generateSequelTitleCandidates(lastWork, 3)
+        : generateTitleCandidates(G.craftFlow.project.name, 3);
+      renderTitleSelect();
+    };
+  }
   document.querySelectorAll('[data-title]').forEach(btn=>{
     btn.onclick = ()=>{
       G.craftFlow.titleChoice = G.craftFlow.titleCandidates[Number(btn.dataset.title)];
@@ -3203,15 +3366,17 @@ function produceWork(gamble){
   G.bells -= totalCost;
   const squad = G.studio.filter(m=>G.craftFlow.squadIds.includes(m.id));
   const project = G.craftFlow.project;
-  const isTrend = project.name === G.trendGenre;
+  const fresh = freshnessInfoFor(project.name);
   const streakBonus = currentStreakBonusFor(project.name);
   const work = generateVillageWork(project, squad, {
     style: G.craftFlow.style, focusAlloc: f, titleChoice: G.craftFlow.titleChoice,
-    quirkChoice: G.craftFlow.quirkChoice, gamble, isTrend, streakBonus,
+    quirkChoice: G.craftFlow.quirkChoice, gamble, fresh, streakBonus,
   });
   work.growth = applyProductionGrowth(squad, project);
   if(G.lastGenre === work.genre) G.genreStreak = (G.genreStreak||0)+1;
   else { G.lastGenre = work.genre; G.genreStreak = 1; }
+  G.productionCount += 1;
+  G.genreLastProducedAt[work.genre] = G.productionCount;
   const reactions = runVillagerReactions(work, squad);
   work.reactions = reactions;
   G.workDefs[work.id] = {name:work.title, icon:work.emojiCombo.split(' ')[0], cat:'furniture'};
@@ -3243,13 +3408,15 @@ function workDetailHTML(work){
                  work.gambleResult==='lose' ? `<div class="result-banner lose">💥 空回りしてしまった…</div>` : '';
   const reactions = work.reactions || [];
   const specialBadges = [];
-  if(work.isTrend) specialBadges.push(`<span style="background:#FF7A45;color:#fff;padding:2px 8px;border-radius:8px;font-size:11px;font-weight:700;">🔥流行ジャンル</span>`);
+  if(work.isSequel) specialBadges.push(`<span style="background:#B98CFF;color:#fff;padding:2px 8px;border-radius:8px;font-size:11px;font-weight:700;">📖シリーズ続編</span>`);
+  if(work.freshTier) specialBadges.push(`<span style="background:${work.freshTier==='high'?'#3FA35C':'#7AAE5C'};color:#fff;padding:2px 8px;border-radius:8px;font-size:11px;font-weight:700;">${work.freshTier==='high'?'🌱新鮮':'🌿少し新鮮'}</span>`);
   if(work.streakBonus) specialBadges.push(`<span style="background:#5C9EFF;color:#fff;padding:2px 8px;border-radius:8px;font-size:11px;font-weight:700;">🔁連続ボーナス+${work.streakBonus}</span>`);
   (work.synergies||[]).forEach(sp=> specialBadges.push(`<span style="background:#8FBF7F;color:#fff;padding:2px 8px;border-radius:8px;font-size:11px;font-weight:700;">✨${sp.label}</span>`));
   const growthLines = (work.growth||[]).map(g=>`📈 ${g.name} の${g.statLabel}が伸びた！`).join('<br>');
+  const obiText = work.perfectCombo ? work.perfectCombo.label : work.hypeLabel;
   return `
     <div class="boxart" style="--genre-color:${work.genreColor};margin:8px 0;">
-      ${work.hypeLabel ? `<div class="boxart-obi">${work.hypeLabel}</div>` : ''}
+      ${obiText ? `<div class="boxart-obi ${work.perfectCombo?'obi-perfect':''}">${obiText}</div>` : ''}
       <div class="boxart-code">${work.catalogCode}</div>
       <div class="boxart-emoji">${work.emojiCombo}</div>
       <div class="boxart-title">${work.title}</div>
@@ -3261,6 +3428,7 @@ function workDetailHTML(work){
         <div class="boxart-reaction">💬 ${work.reaction}</div>
       </div>
       <p style="text-align:left;font-size:14.5px;color:#fff;line-height:1.85;background:rgba(0,0,0,.18);padding:12px 14px;border-radius:12px;margin-top:10px;">${work.synopsis}</p>
+      ${work.perfectCombo ? `<div class="perfect-combo-banner">✨ ${work.perfectCombo.text}</div>` : ''}
       <div class="boxart-meta-grid">
         <div>🎵 主題歌「${work.themeSong}」<br><span>${work.songCredit}</span></div>
         <div>⏱️ ボリューム 約${work.playHours}時間</div>
@@ -3297,19 +3465,32 @@ function renderWorkDetailFromGallery(workId){
 }
 
 function renderGalleryModal(){
-  const rows = [...G.gallery].reverse().map(w=>{
+  const favs = G.gallery.filter(w=>w.fav).slice().reverse();
+  const rest = G.gallery.filter(w=>!w.fav).slice().reverse();
+  const ordered = [...favs, ...rest];
+  const rows = ordered.map(w=>{
     const stars = '★'.repeat(w.stars) + '☆'.repeat(5-w.stars);
     return `<div class="shop-row" style="cursor:pointer;" data-open-work="${w.id}">
       <div class="sr-left"><span class="sr-icon">${w.emojiCombo.split(' ')[0]}</span><div><div class="sr-name">${w.title}</div><div class="sr-price">${w.genre}／${stars}</div></div></div>
-      <span class="mini-btn">見る</span>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <button class="mini-btn" data-fav="${w.id}" style="font-size:15px;padding:6px 10px;">${w.fav?'⭐':'☆'}</button>
+        <span class="mini-btn">見る</span>
+      </div>
     </div>`;
   }).join('');
   openModal(`
     <h2>🖼️ ギャラリー</h2>
-    <p class="mdesc">これまでにつくった作品の記録。タップすると作品ページが見られる。総人気度：⭐${G.popularity}</p>
+    <p class="mdesc">これまでにつくった作品の記録。⭐でお気に入り登録すると上に表示されるよ。タップすると作品ページが見られる。総人気度：⭐${G.popularity}</p>
     ${rows || '<p class="mdesc">まだ作品がありません。</p>'}
     <div class="btn-row" style="margin-top:10px;"><button class="mini-btn" id="backHome4">もどる</button></div>
   `);
+  document.querySelectorAll('[data-fav]').forEach(btn=>{
+    btn.onclick = (e)=>{
+      e.stopPropagation();
+      const w = G.gallery.find(x=>x.id===btn.dataset.fav);
+      if(w){ w.fav = !w.fav; saveGame(); renderGalleryModal(); }
+    };
+  });
   document.querySelectorAll('[data-open-work]').forEach(el=>{
     el.onclick = ()=>renderWorkDetailFromGallery(el.dataset.openWork);
   });
@@ -3371,7 +3552,6 @@ function wakeUpToNextDay(){
     G.day += 1;
     G.phase = 'day';
     G.phaseElapsed = 0;
-    G.trendGenre = pickNewTrend(G.trendGenre);
     applyPhaseLighting();
     refreshBgmForCurrentPhase();
     spawnDailies(G);
