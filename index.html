@@ -756,9 +756,14 @@ function generateQuirkCandidates(genreName, n){
   return pickNUnique(parts.quirk, n);
 }
 
-function buildVillageSynopsis(genreName, squad, stars, quirkOverride){
+const SEQUEL_OPENERS = [
+  (prevTitle)=>`『${prevTitle}』から少し時が流れた頃の物語。`,
+  (prevTitle)=>`前作『${prevTitle}』の、その後を描いた一本。`,
+  (prevTitle)=>`『${prevTitle}』を経て、物語はまだ続いていた。`,
+];
+function buildVillageSynopsis(genreName, squad, stars, quirkOverride, sequelOf){
   const parts = SYNOPSIS_PARTS[genreName] || SYNOPSIS_PARTS['ノベル'];
-  const protagonist = randPick(parts.protagonist);
+  const protagonist = (sequelOf && sequelOf.protagonist) ? sequelOf.protagonist : randPick(parts.protagonist);
   const incident = randPick(parts.incident);
   const twist = randPick(parts.twist);
   const quirk = quirkOverride || randPick(parts.quirk);
@@ -776,15 +781,20 @@ function buildVillageSynopsis(genreName, squad, stars, quirkOverride){
   const FLAVOR_LINKS = ['制作の裏側では、', '撮影の合間には、', '現場を振り返ると、', 'スタッフいわく、'];
   const QUALITY_LINKS = ['そんな一作は、', '仕上がってみれば、', '蓋を開けてみると、'];
 
+  const openerLine = sequelOf ? randPick(SEQUEL_OPENERS)(sequelOf.title) : '';
+  const protagonistLine = sequelOf
+    ? `主人公は、今回も${protagonist}。`
+    : `主人公は${protagonist}。`;
+
   const sentences = [
-    `主人公は${protagonist}。`,
+    openerLine + protagonistLine,
     `${incident}…そのはずが、${twist}。`,
     `${randPick(QUIRK_LINKS)}${quirk}。`,
   ];
   if(flavorLine) sentences.push(`${randPick(FLAVOR_LINKS)}${flavorLine}`);
   sentences.push(`${randPick(QUALITY_LINKS)}${qualityLine}`);
 
-  return sentences.join('');
+  return {text: sentences.join(''), protagonist};
 }
 
 function generateVillageWork(project, squad, opts){
@@ -845,7 +855,9 @@ function generateVillageWork(project, squad, opts){
   const reactionBank = reactionTier==='high'?REACTIONS_HIGH : reactionTier==='low'?REACTIONS_LOW : REACTIONS_MID;
   const reaction = randPick(reactionBank);
 
-  const synopsis = buildVillageSynopsis(project.name, squad, stars, opts.quirkChoice);
+  const synResult = buildVillageSynopsis(project.name, squad, stars, opts.quirkChoice, opts.sequelOf);
+  const synopsis = synResult.text;
+  const protagonist = synResult.protagonist;
   const roleEmojis = [...new Set(squad.map(c=>c.roleEmoji))];
   const emojiCombo = [project.emoji, ...roleEmojis].slice(0,4).join(' ');
 
@@ -874,7 +886,7 @@ function generateVillageWork(project, squad, opts){
     themeSong, songCredit, playHours, catalogCode, hypeLabel, perfectCombo,
     cast: squad.map(c=>`${c.name}（${c.role}）`),
     freshTier: opts.fresh ? opts.fresh.tier : null, streakBonus, synergies: synergies||[],
-    isSequel: !!(opts.titleChoice && opts.titleChoice.isSequel),
+    isSequel: !!(opts.titleChoice && opts.titleChoice.isSequel), protagonist,
   };
 }
 
@@ -968,6 +980,8 @@ function newGame(playerName, villageName, avatar, playerColor){
     lastGenre:null, genreStreak:0,
     productionCount:0, genreLastProducedAt:{},
     loreCount:{note:0, odd:0}, depthsUnlocked:false, depthsCompleted:false,
+    forestCooldownUntil:0,
+    viewZoomHouse: VIEW_ZOOM_DEFAULT, viewZoomOutdoor: VIEW_ZOOM_DEFAULT,
   };
   spawnDailies(state);
   return state;
@@ -1006,6 +1020,12 @@ const DAY_PHASE_SECONDS = 1800; // 昼の長さ（実時間・秒＝30分）。�
 const LIGHT_DRAIN_PER_SEC = 100/75; // ~75 seconds of light per visit
 const FOREST_GATE_TILE = {c:9, r:0};
 const FOREST_EXIT_TILE = {c:9, r:ROWS-1};
+
+// 灯りを使い切って戻ってきたとき、ランタンが再点灯するまでの待ち時間（実時間・ミリ秒）
+const FOREST_COOLDOWN_MS = 60*1000;
+function forestCooldownRemainingMs(){
+  return Math.max(0, (G.forestCooldownUntil||0) - Date.now());
+}
 
 /* ---------- 森の最奥（ふかい場所） ---------- */
 const DEPTHS_UNLOCK_NOTE = 6; // 「白いノートの切れ端」の累計取得数でアンロック
@@ -1188,6 +1208,8 @@ function saveGame(){
       lastGenre:G.lastGenre, genreStreak:G.genreStreak,
       productionCount:G.productionCount, genreLastProducedAt:G.genreLastProducedAt,
       loreCount:G.loreCount, depthsUnlocked:G.depthsUnlocked, depthsCompleted:G.depthsCompleted,
+      forestCooldownUntil:G.forestCooldownUntil,
+      viewZoomHouse:G.viewZoomHouse, viewZoomOutdoor:G.viewZoomOutdoor,
     };
     localStorage.setItem('tsukurumura_save', JSON.stringify(slim));
   }catch(e){ /* storage unavailable, ignore */ }
@@ -1281,6 +1303,9 @@ function loadSaveIntoGame(data){
   if(!G.depthsUnlocked && G.loreCount.note>=DEPTHS_UNLOCK_NOTE && G.loreCount.odd>=DEPTHS_UNLOCK_ODD){
     G.depthsUnlocked = true;
   }
+  G.forestCooldownUntil = data.forestCooldownUntil || 0;
+  G.viewZoomHouse = data.viewZoomHouse!=null ? data.viewZoomHouse : (data.viewZoom!=null ? data.viewZoom : VIEW_ZOOM_DEFAULT);
+  G.viewZoomOutdoor = data.viewZoomOutdoor!=null ? data.viewZoomOutdoor : (data.viewZoom!=null ? Math.min(data.viewZoom, VIEW_ZOOM_MAX_OUTDOOR) : VIEW_ZOOM_DEFAULT);
 }
 
 /* ============================================================
@@ -1565,6 +1590,7 @@ function wireControls(){
    ============================================================ */
 function startGameLoop(){
   renderGameShell();
+  renderGameShellTop();
   renderAcquireLog();
   initThreeScene();
   lastTime = performance.now();
@@ -1588,6 +1614,7 @@ function update(dt){
   updatePrompt();
   updateLightGauge(dt);
   updatePaleEncounterTimer(dt);
+  updateAmbientLifeTimer(dt);
 }
 
 function updateDayNightCycle(dt){
@@ -1639,8 +1666,20 @@ function triggerForestPhenomenon(){
   else if(roll < 0.42) spawnFoundObjectEvent();
   else if(roll < 0.54) spawnDisorientEvent();
   else if(roll < 0.62) spawnLightFlickerEvent();
-  else if(roll < 0.82) spawnGentleBreezeEvent();
-  else spawnFireflyEvent();
+  else if(roll < 0.70) spawnFireflyEvent();
+  // roll>=0.70の分は、このタイマーでは何も起きない（穏やかな生き物・そよ風は別タイマーで独立して発生する）
+}
+
+// 穏やかな系統（動物・そよ風）専用の高頻度タイマー。緊張感の調整とは無関係に、独立して動く。
+function updateAmbientLifeTimer(dt){
+  if(G.scene!=='forest' || !G.forest || G.forest.zone==='depths') return;
+  if(G.forest.ambientTimer==null) G.forest.ambientTimer = 2+Math.random()*2;
+  G.forest.ambientTimer -= dt;
+  if(G.forest.ambientTimer<=0){
+    G.forest.ambientTimer = 4+Math.random()*4;
+    if(Math.random()<0.65) spawnWildlifeEvent();
+    else spawnGentleBreezeEvent();
+  }
 }
 
 const FOREST_GENTLE_LINES = [
@@ -1670,6 +1709,61 @@ function spawnFireflyEvent(){
   G.lightGauge = Math.min(LIGHT_GAUGE_MAX, G.lightGauge+heal);
   updateLightGaugeUI();
   showFlavorToast(randPick(FOREST_FIREFLY_LINES));
+}
+
+// 森の生き物との出会い：捕まえられない、見かけるだけの穏やかな一期一会イベント
+const FOREST_ANIMALS = [
+  {emoji:'🐇', lines:['うさぎが顔を出した。じっとこちらを見て、すぐに草の陰へ跳ねていった。', '茂みの向こうで、うさぎが耳をぴょこんと動かした。']},
+  {emoji:'🐿️', lines:['りすが木の枝を身軽に飛び移っていった。', '足元をりすが一匹、あっという間に駆け抜けていった。']},
+  {emoji:'🦌', lines:['少し離れた木立の間に、しかが静かに立っていた。', 'しかとふと目が合った。すぐに背を向けて、森の奥へ歩いていった。']},
+  {emoji:'🦔', lines:['はりねずみが落ち葉の中をゆっくり歩いていた。', '丸まっていたはりねずみが、そっと顔を出した。']},
+  {emoji:'🦉', lines:['木の上から、ふくろうがこちらをじっと見下ろしていた。', 'ふくろうの低い鳴き声が、頭上から聞こえた。']},
+  {emoji:'🦋', lines:['ちょうが一匹、ひらひらと目の前を横切っていった。', '色とりどりのちょうが、しばらく周りを舞っていた。']},
+];
+function spawnWildlifeEvent(){
+  if(!forestGroup || !G.forest) return;
+  const t = randomForestTileNearPlayer(1.5, 4);
+  if(!t) return;
+  const target = nearestTreeTile(t.c, t.r) || t;
+  const animal = randPick(FOREST_ANIMALS);
+  const startPos = tileCenterWorld(t.c, t.r);
+  const endPos = tileCenterWorld(target.c, target.r);
+  const g = new THREE.Group();
+  // 絵文字は基本的に左向きに描かれているので、右に進むときだけ反転させる（canvasに焼き込む）
+  const flip = (endPos.x > startPos.x);
+  const spr = makeEmojiSprite(animal.emoji, 72, flip);
+  spr.scale.set(.62,.62,.62);
+  g.add(spr);
+  g.position.set(startPos.x, 0.28, startPos.z);
+  setGroupOpacity(g, 0);
+  forestGroup.add(g);
+  forestWildlifeSightings.push({
+    mesh:g, sprite:spr, life:6, maxLife:6, baseY:0.28, hopSeed:Math.random()*10,
+    startX:startPos.x, startZ:startPos.z, endX:endPos.x, endZ:endPos.z,
+  });
+  showFlavorToast(`${animal.emoji} ${randPick(animal.lines)}`);
+}
+
+function updateForestWildlifeSightings(dt){
+  forestWildlifeSightings = forestWildlifeSightings.filter(s=>{
+    s.life -= dt;
+    const elapsed = s.maxLife - s.life;
+    let alpha;
+    if(elapsed<0.4) alpha = elapsed/0.4;
+    else if(s.life<0.6) alpha = Math.max(0, s.life/0.6);
+    else alpha = 1;
+    setGroupOpacity(s.mesh, alpha);
+    // ゆっくり移動しつつ、ぴょこぴょこ跳ねるアイドルモーション
+    const walkT = Math.min(1, elapsed/(s.maxLife*0.85));
+    s.mesh.position.x = s.startX + (s.endX-s.startX)*walkT;
+    s.mesh.position.z = s.startZ + (s.endZ-s.startZ)*walkT;
+    const hop = Math.abs(Math.sin((elapsed+s.hopSeed)*4));
+    s.mesh.position.y = s.baseY + hop*0.15;
+    const squash = 1 - hop*0.15;
+    s.sprite.scale.set(.62*(1+hop*0.12), .62*squash, 1);
+    if(s.life<=0){ forestGroup && forestGroup.remove(s.mesh); return false; }
+    return true;
+  });
 }
 
 function spawnFigureEncounter(){
@@ -1752,7 +1846,7 @@ function spawnVillagerSightingEvent(){
   face.scale.set(.85,.85,.85);
   g.add(face);
   const bubble = makeSpeechBubbleSprite(randPick(FOREST_VILLAGER_LINES));
-  bubble.position.set(0, 0.95, 0);
+  bubble.position.set(0, 1.15, 0);
   g.add(bubble);
   g.position.set(startPos.x, 0, startPos.z);
   setGroupOpacity(g, 0);
@@ -2024,6 +2118,7 @@ function updatePrompt(){
     let label = it.type==='door' ? `「${it.ref.name}」に入る` : PROMPT_TEXT[it.type];
     if(it.type==='bed') label = G.phase==='night' ? '眠る' : 'ひとやすみする';
     if(it.type==='shrine') label = it.ref.done ? 'ほこらにそっと触れる' : 'ほこらに祈りを捧げる';
+    if(it.type==='forestGate' && forestCooldownRemainingMs()>0) label = `森へ入る（ランタン待ち：あと${Math.ceil(forestCooldownRemainingMs()/1000)}秒）`;
     el.textContent = it.type==='placing' ? label : `▶ ${label}`;
     el.style.display = 'block';
   } else {
@@ -2047,7 +2142,7 @@ function doAction(){
   if(it.type==='exit') return exitHouse();
   if(it.type==='bed') return sleep();
   if(it.type==='furniture') return openFurnitureMenu(it.ref);
-  if(it.type==='forestGate') return enterForest();
+  if(it.type==='forestGate') return tryEnterForest();
   if(it.type==='forestExit') return exitForest();
   if(it.type==='forestTree') return shakeForestTree(it.ref);
   if(it.type==='ancientTree') return shakeAncientTree(it.ref);
@@ -2145,6 +2240,7 @@ function enterForest(){
   G.forest.paleTimer = 4+Math.random()*4;
   paleEncounters = [];
   forestVillagerSightings = [];
+  forestWildlifeSightings = [];
   G.lightGauge = LIGHT_GAUGE_MAX;
   G.scene = 'forest';
   G.player.x = FOREST_EXIT_TILE.c*TILE+TILE/2;
@@ -2172,6 +2268,8 @@ function exitForest(){
   paleEncounters = [];
   forestVillagerSightings.forEach(s=>forestGroup && forestGroup.remove(s.mesh));
   forestVillagerSightings = [];
+  forestWildlifeSightings.forEach(s=>forestGroup && forestGroup.remove(s.mesh));
+  forestWildlifeSightings = [];
   if(bgmWasPlayingBeforeForest){
     const activeId = currentBgmSongId();
     const song = activeId ? G.songs.find(s=>s.id===activeId) : null;
@@ -2181,8 +2279,35 @@ function exitForest(){
 }
 
 function returnFromForestOutOfLight(){
-  showFlavorToast('灯りが白く尽きて…気づけば村への道を歩いていた。');
+  G.forestCooldownUntil = Date.now() + FOREST_COOLDOWN_MS;
+  showFlavorToast('灯りが白く尽きて…気づけば村への道を歩いていた。ランタンが灯り直るまで、少し休もう。');
   exitForest();
+  saveGame();
+}
+
+function tryEnterForest(){
+  const remain = forestCooldownRemainingMs();
+  if(remain<=0){ enterForest(); return; }
+  const secs = Math.ceil(remain/1000);
+  const hasGlow = (G.inventory['glowstone']||0) > 0;
+  openModal(`
+    <h2>🕯️ ランタンの灯りがまだ戻っていない</h2>
+    <p class="mdesc">灯りを使い切ってしまったばかり。あと約${secs}秒待てば、また森へ入れそう。${hasGlow?'……輝石をくべれば、すぐに灯しなおせるかもしれない。':''}</p>
+    <div class="btn-row" style="margin-top:10px;">
+      ${hasGlow?`<button class="mini-btn buy" id="useGlowstone">💠輝石を1つ使って灯す</button>`:''}
+      <button class="mini-btn" id="closeCooldown">もどる</button>
+    </div>
+  `);
+  if(hasGlow){
+    document.getElementById('useGlowstone').onclick = ()=>{
+      G.inventory['glowstone'] -= 1;
+      G.forestCooldownUntil = 0;
+      renderInventoryStrip(); saveGame();
+      closeModal();
+      enterForest();
+    };
+  }
+  document.getElementById('closeCooldown').onclick = closeModal;
 }
 
 /* ---------- 森の最奥 ---------- */
@@ -2193,6 +2318,8 @@ function enterDepths(){
   paleEncounters = [];
   forestVillagerSightings.forEach(s=>forestGroup && forestGroup.remove(s.mesh));
   forestVillagerSightings = [];
+  forestWildlifeSightings.forEach(s=>forestGroup && forestGroup.remove(s.mesh));
+  forestWildlifeSightings = [];
   G.lightGauge = LIGHT_GAUGE_MAX;
   G.player.x = DEPTHS_DOOR_TILE.c*TILE+TILE/2;
   G.player.y = (DEPTHS_DOOR_TILE.r+1)*TILE+TILE/2;
@@ -2208,6 +2335,8 @@ function exitDepths(){
   paleEncounters = [];
   forestVillagerSightings.forEach(s=>forestGroup && forestGroup.remove(s.mesh));
   forestVillagerSightings = [];
+  forestWildlifeSightings.forEach(s=>forestGroup && forestGroup.remove(s.mesh));
+  forestWildlifeSightings = [];
   G.lightGauge = Math.min(LIGHT_GAUGE_MAX, G.lightGauge+30);
   G.player.x = FOREST_GATE_TILE.c*TILE+TILE/2;
   G.player.y = (FOREST_GATE_TILE.r+2)*TILE+TILE/2;
@@ -3368,9 +3497,11 @@ function produceWork(gamble){
   const project = G.craftFlow.project;
   const fresh = freshnessInfoFor(project.name);
   const streakBonus = currentStreakBonusFor(project.name);
+  const isSequelChoice = !!(G.craftFlow.titleChoice && G.craftFlow.titleChoice.isSequel);
+  const sequelOf = isSequelChoice ? G.gallery[G.gallery.length-1] : null;
   const work = generateVillageWork(project, squad, {
     style: G.craftFlow.style, focusAlloc: f, titleChoice: G.craftFlow.titleChoice,
-    quirkChoice: G.craftFlow.quirkChoice, gamble, fresh, streakBonus,
+    quirkChoice: G.craftFlow.quirkChoice, gamble, fresh, streakBonus, sequelOf,
   });
   work.growth = applyProductionGrowth(squad, project);
   if(G.lastGenre === work.genre) G.genreStreak = (G.genreStreak||0)+1;
@@ -3626,7 +3757,10 @@ function renderGameShellTop(){
     <div class="hud-chip">⭐ 人気度 ${G.popularity}</div>
     <div class="hud-chip" id="playerChip" style="cursor:pointer;">${G.avatar} ${G.playerName}／${G.villageName}</div>
     <div class="hud-chip bgm-chip" id="bgmToggleChip" style="cursor:pointer;">${bgmLabel}</div>
+    <div class="hud-chip" id="viewZoomChip" style="cursor:pointer;">🔍視野角</div>
   `;
+  const viewZoomChip = document.getElementById('viewZoomChip');
+  if(viewZoomChip) viewZoomChip.onclick = renderViewZoomModal;
   const playerChip = document.getElementById('playerChip');
   if(playerChip) playerChip.onclick = renderAvatarChangeModal;
   const bgmChip = document.getElementById('bgmToggleChip');
@@ -3640,7 +3774,42 @@ function renderGameShellTop(){
   }
 }
 
-/* ---------- アバター変更 ---------- */
+/* ---------- 視野角調整 ---------- */
+function renderViewZoomModal(){
+  const isHouse = G.scene==='house';
+  const key = isHouse ? 'house' : (G.scene==='forest' ? 'forest' : 'village');
+  const maxZoom = viewZoomMaxFor(key);
+  const curValue = isHouse ? G.viewZoomHouse : G.viewZoomOutdoor;
+  openModal(`
+    <h2>🔍 視野角</h2>
+    <p class="mdesc">スライダーで見える範囲を自由に調整できるよ。右にいくほど広く、遠くまで見えるようになる。${isHouse?'あなたの家の中の設定は、他の場所とは別に覚えておくよ。':'村や森の奥での設定は、あなたの家とは別に覚えておくよ。'}</p>
+    <div style="padding:6px 4px 14px;">
+      <input type="range" id="viewZoomSlider" min="${VIEW_ZOOM_MIN}" max="${maxZoom}" step="0.05" value="${curValue}" style="width:100%;">
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:#8a7a5f;margin-top:4px;">
+        <span>せまい</span><span id="viewZoomValue">${curValue.toFixed(2)}</span><span>広い</span>
+      </div>
+    </div>
+    <div class="btn-row" style="margin-top:6px;">
+      <button class="mini-btn" id="viewZoomReset">既定(${VIEW_ZOOM_DEFAULT.toFixed(1)})に戻す</button>
+      <button class="mini-btn buy" id="viewZoomClose">とじる</button>
+    </div>
+  `);
+  const slider = document.getElementById('viewZoomSlider');
+  const valueLabel = document.getElementById('viewZoomValue');
+  const setValue = (v)=>{
+    if(isHouse) G.viewZoomHouse = v; else G.viewZoomOutdoor = v;
+    valueLabel.textContent = v.toFixed(2);
+    applyViewZoom();
+  };
+  slider.oninput = ()=> setValue(Number(slider.value));
+  slider.onchange = ()=>saveGame();
+  document.getElementById('viewZoomReset').onclick = ()=>{
+    slider.value = VIEW_ZOOM_DEFAULT;
+    setValue(VIEW_ZOOM_DEFAULT);
+    saveGame();
+  };
+  document.getElementById('viewZoomClose').onclick = closeModal;
+}
 function renderAvatarChangeModal(){
   let selA = G.avatar, selC = G.playerColor;
   openModal(`
@@ -3708,6 +3877,43 @@ function applyAvatarChange(avatar, color){
    THREE.JS MINIATURE DIORAMA RENDERING
    ============================================================ */
 let renderer3d, scene3d, cameraVillage, cameraHouse, cameraForest, activeCamera;
+
+// 視野角（ズーム）：G.viewZoomHouse／G.viewZoomOutdoor（1.0=これまでのデフォルト、大きいほど広い視野角）に応じて
+// 画角と距離を同時に広げるので、歪みが出にくい形で見える範囲だけを調整できる。
+// 「あなたの家」だけは狭い室内空間なので、より広い上限を許容する。
+const CAMERA_BASE = {
+  village: {fov:38, y:6.4, z:5.4},
+  forest:  {fov:40, y:5.6, z:5.0},
+  house:   {fov:42, y:4.4, z:3.4},
+};
+const VIEW_ZOOM_MIN = 0.8, VIEW_ZOOM_MAX_OUTDOOR = 1.3, VIEW_ZOOM_MAX_HOUSE = 2.0, VIEW_ZOOM_DEFAULT = 1.0;
+function viewZoomMaxFor(key){
+  return key==='house' ? VIEW_ZOOM_MAX_HOUSE : VIEW_ZOOM_MAX_OUTDOOR;
+}
+function cameraOffsetFor(key){
+  const b = CAMERA_BASE[key];
+  const raw = key==='house'
+    ? (G && G.viewZoomHouse!=null ? G.viewZoomHouse : VIEW_ZOOM_DEFAULT)
+    : (G && G.viewZoomOutdoor!=null ? G.viewZoomOutdoor : VIEW_ZOOM_DEFAULT);
+  const zoom = Math.min(raw, viewZoomMaxFor(key));
+  return { y: b.y*zoom, z: b.z*zoom, fov: b.fov + (zoom-1)*20 };
+}
+function initCameraPositions(){
+  const vo = cameraOffsetFor('village');
+  cameraVillage.position.set(0.5, vo.y, vo.z);
+  cameraVillage.lookAt(0.5,0.3,2.5);
+  const ho = cameraOffsetFor('house');
+  cameraHouse.position.set(0, ho.y, ho.z);
+  cameraHouse.lookAt(0,0.3,0);
+  const fo = cameraOffsetFor('forest');
+  cameraForest.position.set(0.5, fo.y, fo.z);
+  cameraForest.lookAt(0.5,0.3,2.5);
+}
+function applyViewZoom(){
+  if(cameraVillage){ cameraVillage.fov = cameraOffsetFor('village').fov; cameraVillage.updateProjectionMatrix(); }
+  if(cameraHouse){ cameraHouse.fov = cameraOffsetFor('house').fov; cameraHouse.updateProjectionMatrix(); }
+  if(cameraForest){ cameraForest.fov = cameraOffsetFor('forest').fov; cameraForest.updateProjectionMatrix(); }
+}
 let hemiLight, dirLight, playerLampLight;
 let villageGroup, houseGroup, forestGroup;
 let playerMesh, villagerMeshes = [], buildingMeshes = [];
@@ -3716,6 +3922,7 @@ let forestTreeMeshes = [], forestSparkleMeshes = [];
 let particleSprites = [];
 let paleEncounters = [];
 let forestVillagerSightings = [];
+let forestWildlifeSightings = [];
 let floorTileMeshes = [];
 const RENDER_W = 640, RENDER_H = 420;
 
@@ -3726,13 +3933,17 @@ function tileCenterWorld(c, r){
   return { x: c + 0.5 - COLS/2, z: r + 0.5 - ROWS/2 };
 }
 
-function makeEmojiSprite(text, size){
+function makeEmojiSprite(text, size, flip){
   size = size || 64;
   const cv = document.createElement('canvas');
   cv.width = size; cv.height = size;
   const ctx = cv.getContext('2d');
   ctx.font = (size*0.72)+'px sans-serif';
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  if(flip){
+    ctx.translate(size,0);
+    ctx.scale(-1,1);
+  }
   ctx.fillText(text, size/2, size/2+2);
   const tex = new THREE.CanvasTexture(cv);
   const mat = new THREE.SpriteMaterial({map:tex, transparent:true});
@@ -3742,12 +3953,12 @@ function makeEmojiSprite(text, size){
 }
 
 function makeSpeechBubbleSprite(text){
-  const W = 320, H = 130;
+  const W = 360, H = 160;
   const cv = document.createElement('canvas');
   cv.width = W; cv.height = H;
   const ctx = cv.getContext('2d');
-  ctx.font = '22px sans-serif';
-  const maxCharsPerLine = 12;
+  ctx.font = 'bold 30px sans-serif';
+  const maxCharsPerLine = 10;
   const lines = [];
   let remaining = text;
   while(remaining.length > 0 && lines.length < 2){
@@ -3757,8 +3968,8 @@ function makeSpeechBubbleSprite(text){
   if(remaining.length>0 && lines.length){
     lines[lines.length-1] = lines[lines.length-1].slice(0,-1)+'…';
   }
-  const bx=10, by=10, bw=W-20, bh=30+lines.length*30;
-  const r=16;
+  const bx=10, by=10, bw=W-20, bh=36+lines.length*38;
+  const r=18;
   ctx.beginPath();
   ctx.moveTo(bx+r,by);
   ctx.arcTo(bx+bw,by,bx+bw,by+bh,r);
@@ -3766,25 +3977,25 @@ function makeSpeechBubbleSprite(text){
   ctx.arcTo(bx,by+bh,bx,by,r);
   ctx.arcTo(bx,by,bx+bw,by,r);
   ctx.closePath();
-  ctx.fillStyle = 'rgba(255,255,255,0.94)';
-  ctx.strokeStyle = 'rgba(60,55,48,0.55)';
-  ctx.lineWidth = 3;
+  ctx.fillStyle = 'rgba(255,255,255,0.96)';
+  ctx.strokeStyle = 'rgba(60,55,48,0.6)';
+  ctx.lineWidth = 3.5;
   ctx.fill(); ctx.stroke();
   ctx.beginPath();
-  ctx.moveTo(bx+bw/2-10, by+bh-1);
-  ctx.lineTo(bx+bw/2, by+bh+16);
-  ctx.lineTo(bx+bw/2+10, by+bh-1);
+  ctx.moveTo(bx+bw/2-12, by+bh-1);
+  ctx.lineTo(bx+bw/2, by+bh+20);
+  ctx.lineTo(bx+bw/2+12, by+bh-1);
   ctx.closePath();
-  ctx.fillStyle = 'rgba(255,255,255,0.94)';
+  ctx.fillStyle = 'rgba(255,255,255,0.96)';
   ctx.fill();
   ctx.stroke();
-  ctx.fillStyle = '#33302B';
+  ctx.fillStyle = '#2A2620';
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  lines.forEach((ln,i)=> ctx.fillText(ln, bx+bw/2, by+26+i*30));
+  lines.forEach((ln,i)=> ctx.fillText(ln, bx+bw/2, by+30+i*38));
   const tex = new THREE.CanvasTexture(cv);
   const mat = new THREE.SpriteMaterial({map:tex, transparent:true});
   const spr = new THREE.Sprite(mat);
-  spr.scale.set(1.4, 1.4*(H/W), 1);
+  spr.scale.set(2.2, 2.2*(H/W), 1);
   return spr;
 }
 
@@ -3895,17 +4106,11 @@ function initThreeScene(){
   container.innerHTML = '';
   container.appendChild(renderer3d.domElement);
 
-  cameraVillage = new THREE.PerspectiveCamera(38, RENDER_W/RENDER_H, 0.1, 100);
-  cameraVillage.position.set(0.5, 6.4, 7.9);
-  cameraVillage.lookAt(0.5,0.3,2.5);
-
-  cameraHouse = new THREE.PerspectiveCamera(42, RENDER_W/RENDER_H, 0.1, 100);
-  cameraHouse.position.set(0, 4.4, 3.4);
-  cameraHouse.lookAt(0,0.3,0);
-
-  cameraForest = new THREE.PerspectiveCamera(40, RENDER_W/RENDER_H, 0.1, 100);
-  cameraForest.position.set(0.5, 6.0, 7.9);
-  cameraForest.lookAt(0.5,0.3,2.5);
+  cameraVillage = new THREE.PerspectiveCamera(CAMERA_BASE.village.fov, RENDER_W/RENDER_H, 0.1, 100);
+  cameraHouse = new THREE.PerspectiveCamera(CAMERA_BASE.house.fov, RENDER_W/RENDER_H, 0.1, 100);
+  cameraForest = new THREE.PerspectiveCamera(CAMERA_BASE.forest.fov, RENDER_W/RENDER_H, 0.1, 100);
+  initCameraPositions();
+  applyViewZoom();
 
   activeCamera = cameraVillage;
 
@@ -4319,6 +4524,7 @@ function syncThree(){
   });
   updatePaleEncounters(1/60);
   updateForestVillagerSightings(1/60);
+  updateForestWildlifeSightings(1/60);
 
   updateSceneVisibility();
   updateCameraFollow();
@@ -4328,7 +4534,8 @@ function syncThree(){
 function updateCameraFollow(){
   if(!activeCamera) return;
   const wp = toWorld(G.player.x, G.player.y);
-  const offset = G.scene==='house' ? {y:4.4, z:3.4} : G.scene==='forest' ? {y:5.6, z:5.0} : {y:6.4, z:5.4};
+  const key = G.scene==='house' ? 'house' : G.scene==='forest' ? 'forest' : 'village';
+  const offset = cameraOffsetFor(key);
   const targetX = wp.x, targetY = offset.y, targetZ = wp.z + offset.z;
   const cp = activeCamera.position;
   cp.x += (targetX - cp.x)*0.08;
