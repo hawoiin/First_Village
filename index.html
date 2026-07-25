@@ -195,6 +195,14 @@
   }
   .modal-box h2{margin:0 0 4px;font-size:18px;color:var(--wood-d);}
   .modal-box .mdesc{font-size:12px;color:#8a7a5f;margin-bottom:12px;line-height:1.6;}
+  .sg-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:6px;}
+  .sg-btn{
+    aspect-ratio:1;border:none;border-radius:16px;background:var(--sg-color);color:#fff;
+    font-family:'Zen Maru Gothic';font-weight:900;font-size:15px;cursor:pointer;
+    box-shadow:0 4px 0 rgba(0,0,0,.15);transition:transform .1s ease, box-shadow .1s ease, filter .15s ease;
+  }
+  .sg-btn:active{transform:translateY(3px);box-shadow:0 1px 0 rgba(0,0,0,.15);}
+  .sg-btn.lit{filter:brightness(1.45);transform:scale(1.08);box-shadow:0 0 0 4px rgba(255,255,255,.75), 0 4px 0 rgba(0,0,0,.15);}
   .shop-row{
     display:flex;align-items:center;justify-content:space-between;gap:10px;
     background:#fffef9;border-radius:12px;padding:8px 12px;margin-bottom:8px;
@@ -401,6 +409,54 @@ const RECIPES = [
 
 const SHOP_STOCK = ['f_bookshelf','f_painting','f_clock','f_plant','f_sofa','f_chandelier','f_globe'];
 const SHOP_UNLOCKS = { f_clock:8, f_sofa:15, f_chandelier:22, f_globe:30 };
+
+/* ---------- 店主オズワルド：軽い逆説と洒脱さで話す ---------- */
+const OSWALD_GREETINGS = [
+  'おや、いらっしゃい。退屈な一日に、ようやく彩りが差した。',
+  'ようこそ。ここでは、退屈しない程度の商売をしているつもりだよ。',
+  'また会えたね。……いや、こう言うたびに初対面のような気もするのだが。',
+  'いらっしゃい。買い物とは、財布と相談する哲学だと思わないかね。',
+];
+const OSWALD_ITEM_LINES = {
+  wood: '木の枝か。……あらゆる商品の中で、一番正直な品だね。飾りようがないから。',
+  apple: 'りんごには罪の味がすると言われるが、ここではただの間食だ。',
+  chestnut: 'くりか。棘のある殻の中身ほど、存外やさしいものだよ。',
+  flower: '花を売るとは、少し奇妙な商売だ。誰も花を「所有」などできはしないのに。',
+  fossil: '化石とは、時間が唯一正直に語る記録だ。人の記録は、たいてい都合よく書き換えられる。',
+  gem: 'おお、美しい。美しいものを売るのは、ちょっとした裏切りの気分になる。',
+  glowstone: '光る石、か。闇の中でしか分からない価値というものもある。',
+  ancient_wood: '大樹のかけらとは、また懐かしいものを持ってきたね。',
+  mushroom: '森のキノコか。……食べられる方だといいのだけれどね。',
+  note_page: '……ふむ。忘れられた紙にも値はつく。もっとも、値がつかないものほど、たいてい高くつくのだけどね。',
+  odd_item: '誰かの忘れ物、か。忘れられることと、手放すことは、似ているようで違うものだ。',
+  bug_butterfly: '蝶とは儚さの代名詞だが、ここでは立派な商品だ。',
+  bug_ladybug: 'てんとう虫か。幸運の虫だそうだが、幸運を売るとは皮肉なものだね。',
+  bug_bee: 'はちを恐れない者は、たいてい刺される。用心したまえ。',
+  fish_carp: 'ふな、いつもの顔ぶれだ。安定とは、退屈の別名でもある。',
+  fish_trop: 'これは珍しい。もっとも、珍しさとは、しばしば値段のことでしかないのだけどね。',
+  fish_shrimp: 'えびか。曲がっていても、ちゃんと値はつく。見習いたいものだ。',
+  fish_junk: '古靴か。……誰かの旅の記録だと思えば、悪くない。',
+  f_bookshelf: '本棚とは、読まれなかった本のための墓標でもある。',
+  f_painting: '絵とは、額縁の分だけ値が張るものだよ。',
+  f_clock: '時計を買うとは、皮肉なものだ。時間はどのみち、誰にも買えないのに。',
+  f_plant: '観葉植物か。生きているものを「家具」と呼ぶのは、少し傲慢だとは思わないかね。',
+  f_sofa: '良い趣味だ。趣味の良さというのは、他人の羨望でしか測れないというのに。',
+  f_chandelier: '豪華なものほど、灯りを消したときの部屋が寂しく見えるものだよ。',
+  f_globe: '世界を机の上に置くとは、大した傲慢だ。……気に入ったよ。',
+};
+const OSWALD_CATEGORY_LINES = {
+  material: ['良い品だ。……もっとも、「良い」の基準は人それぞれだがね。', 'ふむ、悪くない。悪くない、というのが一番当てにならない褒め言葉なのだが。'],
+  bug: ['虫か。小さくとも、値がつくのだから大したものだ。'],
+  fish: ['魚とは正直な生き物だよ。針にかかるまでは。'],
+  furniture: ['良い趣味だ、と言っておこう。社交辞令ではなく。'],
+  lore: ['……それは、値段のつけ方に迷う品だね。'],
+};
+function oswaldLineFor(id){
+  if(OSWALD_ITEM_LINES[id]) return OSWALD_ITEM_LINES[id];
+  const cat = getItemDef(id) && getItemDef(id).cat;
+  const bank = OSWALD_CATEGORY_LINES[cat];
+  return bank ? randPick(bank) : 'ふむ、それもまた一興。';
+}
 
 /* ---------- 森の奥：気配イベント用テキスト（正体は説明しない） ---------- */
 const PALE_LINES = [
@@ -655,8 +711,6 @@ function getPersonalityGenreComment(personality, genreName){
   const template = bank[personality];
   return template ? template.replace('{genre}', genreName) : null;
 }
-const FOCUS_POINT_COST = 8;
-const FOCUS_MAX = 6;
 const GAMBLE_WIN_CHANCE = 0.45;
 const VILLAGER_STAT_CAP = 6; // 贈り物＋制作経験で伸ばせる能力ボーナスの上限（旧:3）
 const STREAK_BONUS_CAP = 3; // 同じジャンルを連続でつくったときの最大ボーナス
@@ -738,16 +792,36 @@ function generateTitleCandidates(genreName, n){
   return out;
 }
 
-const SEQUEL_SUFFIXES = ['2','II','リターンズ','〜再臨〜','〜そして、もう一度〜','外伝','完結編','〜続きの物語〜'];
+// 続編の続編でタイトルが積み重ならないよう、シリーズの「元タイトル」を基準に何作目かを判定する
+const SEQUEL_TAGS_BY_NUM = {
+  2: ['2','II','リターンズ','〜再臨〜','〜そして、もう一度〜'],
+  3: ['3','III','〜新章〜','完結編','〜三度目の正直〜'],
+  4: ['4','IV','〜終章〜','ファイナル','〜まだ続く〜'],
+};
+function toRoman(num){
+  const romanMap = [[1000,'M'],[900,'CM'],[500,'D'],[400,'CD'],[100,'C'],[90,'XC'],[50,'L'],[40,'XL'],[10,'X'],[9,'IX'],[5,'V'],[4,'IV'],[1,'I']];
+  let n = num, out = '';
+  for(const [val,sym] of romanMap){ while(n>=val){ out+=sym; n-=val; } }
+  return out;
+}
+function tagsForSeriesNumber(n){
+  if(SEQUEL_TAGS_BY_NUM[n]) return SEQUEL_TAGS_BY_NUM[n];
+  return [String(n), toRoman(n), `〜第${n}章〜`, `その${n}`];
+}
 function generateSequelTitleCandidates(prevWork, n){
   const genreName = prevWork.genre;
   const taglineBank = TAGLINES[genreName] || TAGLINES['ノベル'];
   const taglinePool = pickNUnique(taglineBank, n);
-  const suffixes = [...SEQUEL_SUFFIXES].sort(()=>Math.random()-0.5).slice(0,n);
+  const baseTitle = prevWork.seriesBase || prevWork.title;
+  const seriesNumber = (prevWork.seriesNumber || 1) + 1;
+  const tags = tagsForSeriesNumber(seriesNumber);
+  const suffixes = [...tags].sort(()=>Math.random()-0.5).slice(0,n);
   return suffixes.map((suf,i)=>({
-    title: `${prevWork.title} ${suf}`,
+    title: `${baseTitle} ${suf}`,
     tagline: taglinePool[i % taglinePool.length],
     isSequel: true,
+    seriesBase: baseTitle,
+    seriesNumber,
   }));
 }
 
@@ -887,6 +961,8 @@ function generateVillageWork(project, squad, opts){
     cast: squad.map(c=>`${c.name}（${c.role}）`),
     freshTier: opts.fresh ? opts.fresh.tier : null, streakBonus, synergies: synergies||[],
     isSequel: !!(opts.titleChoice && opts.titleChoice.isSequel), protagonist,
+    seriesBase: opts.titleChoice && opts.titleChoice.seriesBase || null,
+    seriesNumber: (opts.titleChoice && opts.titleChoice.seriesNumber) || 1,
   };
 }
 
@@ -916,6 +992,19 @@ const GIFT_REACTIONS = {
   'マイペース':['……ん、ありがとう。','こういう気遣い、嫌いじゃないよ。'],
   'きれい好き':['きれいな物ね、大事にするわ。ありがとう。','ちゃんとお礼言っておくね。ありがとう。'],
 };
+
+// 制作時に渡せる「好きなもの」：気合ポイント（ベル消費）の代わりに、好物を渡してその回だけ得意分野を伸ばす
+const FAVORITE_ITEMS = {
+  moko:'flower',   // ツキ（のんびり）→ 🌸はな
+  pyon:'apple',    // ヒヨリ（げんき）→ 🍎りんご
+  konta:'mushroom',// ウラ（いたずら）→ 🍄森のキノコ
+  ponzu:'chestnut',// カサネ（マイペース）→ 🌰くり
+  penta:'gem',     // ぺんた（きれい好き）→ 💎宝石
+};
+function specialtyStatOf(m){
+  const stats = ['tech','idea','coop'];
+  return stats.reduce((best,cur)=> m[cur]>m[best] ? cur : best, stats[0]);
+}
 
 /* ============================================================
    STATE
@@ -982,6 +1071,7 @@ function newGame(playerName, villageName, avatar, playerColor){
     loreCount:{note:0, odd:0}, depthsUnlocked:false, depthsCompleted:false,
     forestCooldownUntil:0,
     viewZoomHouse: VIEW_ZOOM_DEFAULT, viewZoomOutdoor: VIEW_ZOOM_DEFAULT,
+    soundGameHighScore: 0,
   };
   spawnDailies(state);
   return state;
@@ -1210,6 +1300,7 @@ function saveGame(){
       loreCount:G.loreCount, depthsUnlocked:G.depthsUnlocked, depthsCompleted:G.depthsCompleted,
       forestCooldownUntil:G.forestCooldownUntil,
       viewZoomHouse:G.viewZoomHouse, viewZoomOutdoor:G.viewZoomOutdoor,
+      soundGameHighScore:G.soundGameHighScore,
     };
     localStorage.setItem('tsukurumura_save', JSON.stringify(slim));
   }catch(e){ /* storage unavailable, ignore */ }
@@ -1306,6 +1397,7 @@ function loadSaveIntoGame(data){
   G.forestCooldownUntil = data.forestCooldownUntil || 0;
   G.viewZoomHouse = data.viewZoomHouse!=null ? data.viewZoomHouse : (data.viewZoom!=null ? data.viewZoom : VIEW_ZOOM_DEFAULT);
   G.viewZoomOutdoor = data.viewZoomOutdoor!=null ? data.viewZoomOutdoor : (data.viewZoom!=null ? Math.min(data.viewZoom, VIEW_ZOOM_MAX_OUTDOOR) : VIEW_ZOOM_DEFAULT);
+  G.soundGameHighScore = data.soundGameHighScore || 0;
 }
 
 /* ============================================================
@@ -2208,7 +2300,7 @@ function shakeTree(tree){
   tree.shaken = true;
   const roll = Math.random();
   let got;
-  if(roll<0.5) got='wood'; else if(roll<0.8) got='apple'; else got='chestnut';
+  if(roll<0.4) got='wood'; else if(roll<0.65) got='apple'; else if(roll<0.85) got='chestnut'; else got='flower';
   addItem(got,1);
   addParticle(`+1 ${getItemDef(got).icon}`, tree.c*TILE+TILE/2, tree.r*TILE);
   renderInventoryStrip(); saveGame();
@@ -2642,27 +2734,45 @@ function renderShopModal(){
     const priceText = unlocked ? `💰${it.buy}` : `🔒 人気度${req}以上で解禁（今：⭐${G.popularity}）`;
     return `<div class="shop-row">
       <div class="sr-left"><span class="sr-icon">${unlocked?it.icon:'🔒'}</span><div><div class="sr-name">${unlocked?it.name:'？？？'}</div><div class="sr-price">${priceText}</div></div></div>
-      <button class="mini-btn buy" data-buy="${id}" ${can?'':'disabled'}>買う</button>
+      <div class="btn-row" style="margin:0;gap:6px;">
+        ${unlocked?`<button class="mini-btn" data-show="${id}">見せる</button>`:''}
+        <button class="mini-btn buy" data-buy="${id}" ${can?'':'disabled'}>買う</button>
+      </div>
     </div>`;
   }).join('');
-  const sellable = Object.entries(G.inventory).filter(([id,n])=>n>0 && getItemDef(id) && getItemDef(id).cat!=='furniture');
+  const sellable = Object.entries(G.inventory).filter(([id,n])=>n>0 && getItemDef(id) && getItemDef(id).cat!=='furniture' && (getItemDef(id).sell||0)>0);
   const sellRows = sellable.length ? sellable.map(([id,n])=>{
     const it = getItemDef(id);
     return `<div class="shop-row">
       <div class="sr-left"><span class="sr-icon">${it.icon}</span><div><div class="sr-name">${it.name} ×${n}</div><div class="sr-price">1個 💰${it.sell}</div></div></div>
-      <button class="mini-btn" data-sell="${id}">売る</button>
+      <div class="btn-row" style="margin:0;gap:6px;">
+        <button class="mini-btn" data-show="${id}">見せる</button>
+        <button class="mini-btn" data-sell="${id}">売る</button>
+      </div>
     </div>`;
   }).join('') : '<p style="font-size:12px;color:#a08f6f;">売れるものがありません。</p>';
 
   openModal(`
-    <h2>🏪 よろず商店</h2>
-    <p class="mdesc">家具は購入すればすぐ持ち物に入る。集めた素材や虫・魚はここで売れるよ。はじめて置いた家具は人気度が上がって、シークレットの品も解禁されていくよ。</p>
-    <h3 style="font-size:13px;margin:10px 0 6px;">買う</h3>
-    ${buyRows}
-    <h3 style="font-size:13px;margin:14px 0 6px;">売る</h3>
-    ${sellRows}
+    <h2>🎩 オズワルドのよろず商店</h2>
+    <p class="mdesc">家具は購入すればすぐ持ち物に入る。集めた素材や虫・魚はここで売れるよ。はじめて置いた家具は人気度が上がって、シークレットの品も解禁されていくよ。アイテムの「見せる」を押すと、下でオズワルドが何か言うよ。</p>
+    <div style="max-height:42vh;overflow-y:auto;padding-right:2px;">
+      <h3 style="font-size:13px;margin:10px 0 6px;">買う</h3>
+      ${buyRows}
+      <h3 style="font-size:13px;margin:14px 0 6px;">売る</h3>
+      ${sellRows}
+    </div>
+    <div class="shop-row" style="margin-top:12px;background:#FFF8EA;">
+      <div class="sr-left"><span class="sr-icon">🎩</span><div><div class="sr-name">オズワルド</div><div class="sr-price" id="oswaldLineBox">「${randPick(OSWALD_GREETINGS)}」</div></div></div>
+    </div>
     <div class="btn-row" style="margin-top:10px;"><button class="mini-btn" id="closeShop">とじる</button></div>
   `);
+  document.querySelectorAll('[data-show]').forEach(btn=>{
+    btn.onclick = ()=>{
+      const id = btn.dataset.show;
+      const box = document.getElementById('oswaldLineBox');
+      if(box) box.textContent = `「${oswaldLineFor(id)}」`;
+    };
+  });
   document.querySelectorAll('[data-buy]').forEach(btn=>{
     btn.onclick = ()=>{
       const id = btn.dataset.buy, it = getItemDef(id);
@@ -2705,15 +2815,154 @@ function renderWorkshopHome(){
       <div class="sr-left"><span class="sr-icon">🎵</span><div><div class="sr-name">曲をつくる</div><div class="sr-price">マス目にメロディを打ち込んで再生できる／保存した曲：${G.songs.length}曲</div></div></div>
       <button class="mini-btn" id="goSong">ひらく</button>
     </div>
+    <div class="shop-row">
+      <div class="sr-left"><span class="sr-icon">🎧</span><div><div class="sr-name">音あてゲーム</div><div class="sr-price">自己ベスト：${G.soundGameHighScore||0}回</div></div></div>
+      <button class="mini-btn" id="goSoundGame">あそぶ</button>
+    </div>
     ${G.gallery.length ? `<div class="shop-row"><div class="sr-left"><span class="sr-icon">🖼️</span><div><div class="sr-name">ギャラリー</div><div class="sr-price">これまでの作品：${G.gallery.length}本</div></div></div><button class="mini-btn" id="goGallery">見る</button></div>` : ''}
     <div class="btn-row" style="margin-top:10px;"><button class="mini-btn" id="closeWorkshop">とじる</button></div>
   `);
   document.getElementById('goProject').onclick = renderProjectSelect;
   document.getElementById('goCraft').onclick = renderCraftModal;
   document.getElementById('goSong').onclick = renderSongListModal;
+  document.getElementById('goSoundGame').onclick = renderSoundGameModal;
   const gb = document.getElementById('goGallery');
   if(gb) gb.onclick = renderGalleryModal;
   document.getElementById('closeWorkshop').onclick = closeModal;
+}
+
+/* ---------- 音あてゲーム ---------- */
+const SOUND_GAME_NOTES = [
+  {name:'ド', freq:261.63, color:'#FF9F6B'},
+  {name:'レ', freq:293.66, color:'#FFC96B'},
+  {name:'ミ', freq:329.63, color:'#6FAE5C'},
+  {name:'ソ', freq:392.00, color:'#8FD3E8'},
+  {name:'ラ', freq:440.00, color:'#FFB4C6'},
+];
+let soundGame = null;
+
+function renderSoundGameModal(){
+  soundGame = null;
+  const best = G.soundGameHighScore || 0;
+  const buttons = SOUND_GAME_NOTES.map((n,i)=>`
+    <button class="sg-btn" id="sgBtn${i}" data-sg="${i}" style="--sg-color:${n.color};">${n.name}</button>
+  `).join('');
+  openModal(`
+    <h2>🎧 音あてゲーム</h2>
+    <p class="mdesc">鳴った音の順番をよく聞いて、同じ順にタップしよう。正解するたびに1音ずつ長くなっていくよ。<br>自己ベスト：${best}回</p>
+    <p class="mdesc" id="soundGameStatus" style="font-weight:700;color:var(--wood-d);text-align:center;font-size:14px;">「はじめる」を押してね</p>
+    <div id="soundGameRound" style="text-align:center;font-size:12px;color:#8a7a5f;margin-bottom:8px;"></div>
+    <div class="sg-grid">${buttons}</div>
+    <div class="btn-row" style="margin-top:14px;">
+      <button class="mini-btn buy" id="sgStart">はじめる</button>
+      <button class="mini-btn" id="sgReplay" disabled>🔁もう一度聞く</button>
+      <button class="mini-btn" id="closeSoundGame">とじる</button>
+    </div>
+  `);
+  document.querySelectorAll('[data-sg]').forEach(btn=>{
+    btn.onclick = ()=> handleSoundGameInput(Number(btn.dataset.sg));
+  });
+  document.getElementById('sgStart').onclick = startSoundGame;
+  document.getElementById('sgReplay').onclick = replaySoundGameSequence;
+  document.getElementById('closeSoundGame').onclick = closeModal;
+}
+
+function startSoundGame(){
+  soundGame = {sequence:[], playerIndex:0, locked:true};
+  const startBtn = document.getElementById('sgStart');
+  if(startBtn) startBtn.disabled = true;
+  setReplayEnabled(false);
+  nextSoundGameRound();
+}
+
+function setReplayEnabled(on){
+  const btn = document.getElementById('sgReplay');
+  if(btn) btn.disabled = !on;
+}
+
+function nextSoundGameRound(){
+  soundGame.sequence.push(Math.floor(Math.random()*SOUND_GAME_NOTES.length));
+  soundGame.playerIndex = 0;
+  soundGame.locked = true;
+  setReplayEnabled(false);
+  const roundEl = document.getElementById('soundGameRound');
+  if(roundEl) roundEl.textContent = `${soundGame.sequence.length}音目`;
+  playSoundGameSequence();
+}
+
+function replaySoundGameSequence(){
+  if(!soundGame || soundGame.locked) return;
+  soundGame.playerIndex = 0;
+  soundGame.locked = true;
+  setReplayEnabled(false);
+  playSoundGameSequence();
+}
+
+function flashSoundGameButton(i, on){
+  const btn = document.getElementById('sgBtn'+i);
+  if(btn) btn.classList.toggle('lit', on);
+}
+
+function playSoundGameSequence(){
+  const seq = soundGame.sequence;
+  const statusEl = document.getElementById('soundGameStatus');
+  if(statusEl) statusEl.textContent = 'よく聞いてね…';
+  let i = 0;
+  const step = ()=>{
+    if(!soundGame) return; // モーダルが閉じられていたら中断
+    if(i>=seq.length){
+      soundGame.locked = false;
+      setReplayEnabled(true);
+      const st = document.getElementById('soundGameStatus');
+      if(st) st.textContent = '同じ順番でタップしてね';
+      return;
+    }
+    playTone(SOUND_GAME_NOTES[seq[i]].freq, 0.32, 'sine', 0.35);
+    i++;
+    setTimeout(step, 550);
+  };
+  setTimeout(step, 500);
+}
+
+function handleSoundGameInput(i){
+  if(!soundGame || soundGame.locked) return;
+  const seq = soundGame.sequence;
+  flashSoundGameButton(i, true);
+  playTone(SOUND_GAME_NOTES[i].freq, 0.25, 'sine', 0.35);
+  setTimeout(()=>flashSoundGameButton(i, false), 220);
+  if(seq[soundGame.playerIndex] !== i){
+    soundGameOver(seq[soundGame.playerIndex], i);
+    return;
+  }
+  soundGame.playerIndex++;
+  if(soundGame.playerIndex >= seq.length){
+    soundGame.locked = true;
+    setReplayEnabled(false);
+    const statusEl = document.getElementById('soundGameStatus');
+    if(statusEl) statusEl.textContent = 'せいかい！つぎへ…';
+    setTimeout(()=>{ if(soundGame) nextSoundGameRound(); }, 700);
+  }
+}
+
+function soundGameOver(expectedIdx, givenIdx){
+  const seq = soundGame.sequence;
+  const score = seq.length - 1;
+  const statusEl = document.getElementById('soundGameStatus');
+  const isNewBest = score > (G.soundGameHighScore||0);
+  if(isNewBest){ G.soundGameHighScore = score; saveGame(); }
+  let msg = isNewBest ? `✨自己ベスト更新！${score}回まで正解！` : `ざんねん…${score}回まで正解。`;
+  if(expectedIdx!=null){
+    const seqNames = seq.map(idx=>SOUND_GAME_NOTES[idx].name).join('→');
+    msg += `<br>正解は「${seqNames}」。${score+1}番目は「${SOUND_GAME_NOTES[expectedIdx].name}」だったよ（押したのは「${SOUND_GAME_NOTES[givenIdx].name}」）。`;
+  }
+  if(statusEl) statusEl.innerHTML = msg;
+  playTone(196.00, 0.5, 'sine', 0.3);
+  const roundEl = document.getElementById('soundGameRound');
+  if(roundEl) roundEl.textContent = '';
+  soundGame = null;
+  setReplayEnabled(false);
+  const startBtn = document.getElementById('sgStart');
+  if(startBtn){ startBtn.disabled = false; startBtn.textContent = 'もう一度あそぶ'; }
 }
 
 /* ---------- Song Composer ---------- */
@@ -3291,7 +3540,7 @@ function renderSquadSelect(){
     <p class="mdesc">最大4人まで選べる。必要 技術${proj.tech}／発想${proj.idea}／協調${proj.coop} に対して、今の合計は 技術${techSum}／発想${ideaSum}／協調${coopSum}（贈り物・経験・相性ボーナス込み）。${synergyLine}</p>
     ${rows}
     <div class="btn-row" style="margin-top:10px;">
-      <button class="mini-btn buy" id="nextFocus">次へ（気合を入れる）▶</button>
+      <button class="mini-btn buy" id="nextFocus">次へ（好きなものを渡す）▶</button>
       <button class="mini-btn" id="backHome3">もどる</button>
     </div>
   `);
@@ -3308,64 +3557,86 @@ function renderSquadSelect(){
   document.getElementById('backHome3').onclick = renderWorkshopHome;
 }
 
-/* ---------- Step 4: focus allocation ---------- */
+/* ---------- Step 4: 好きなものを渡す ---------- */
 function renderFocusAllocate(){
-  if(!G.craftFlow.focusAlloc) G.craftFlow.focusAlloc = {tech:0, idea:0, coop:0};
-  const f = G.craftFlow.focusAlloc;
-  const totalPts = f.tech+f.idea+f.coop;
-  const cost = totalPts*FOCUS_POINT_COST;
+  if(!G.craftFlow.giftBonus) G.craftFlow.giftBonus = {tech:0, idea:0, coop:0};
+  if(!G.craftFlow.giftedIds) G.craftFlow.giftedIds = [];
+  const gb = G.craftFlow.giftBonus;
   const proj = G.craftFlow.project;
   const squad = G.studio.filter(m=>G.craftFlow.squadIds.includes(m.id));
   const {techSum:baseTechRaw, ideaSum:baseIdeaRaw, coopSum:baseCoopRaw} = computeStudioStats(squad);
   const fresh = freshnessInfoFor(proj.name);
   const streakBonus = currentStreakBonusFor(proj.name);
-  const baseTech = baseTechRaw + streakBonus, baseIdea = baseIdeaRaw + streakBonus, baseCoop = baseCoopRaw + streakBonus;
+  const baseTech = baseTechRaw + streakBonus + gb.tech;
+  const baseIdea = baseIdeaRaw + streakBonus + gb.idea;
+  const baseCoop = baseCoopRaw + streakBonus + gb.coop;
   const discount = fresh ? fresh.discount : 0;
   const needTech = Math.max(1, proj.tech - discount), needIdea = Math.max(1, proj.idea - discount), needCoop = Math.max(1, proj.coop - discount);
 
-  const row = (label, key, icon, base, need)=>{
-    const total = base + f[key];
+  const statLabel = {tech:'💻技術', idea:'📝発想', coop:'🎤協調'};
+  const statCol = (label, icon, total, need)=>{
     const met = total>=need;
     return `
-    <div class="shop-row">
-      <div class="sr-left"><span class="sr-icon">${icon}</span><div><div class="sr-name">${label} +${f[key]}</div><div class="sr-price" style="color:${met?'#2ED47A':'#FF5C5C'};font-weight:700;">${total} / 必要 ${need}${met?' ✔達成':' ← あと'+(need-total)}</div></div></div>
-      <div class="btn-row" style="margin:0;gap:6px;">
-        <button class="mini-btn" data-foc-minus="${key}" ${f[key]<=0?'disabled':''}>－</button>
-        <button class="mini-btn buy" data-foc-plus="${key}" ${totalPts>=FOCUS_MAX||G.bells<cost+FOCUS_POINT_COST?'disabled':''}>＋</button>
-      </div>
+    <div style="flex:1;background:#fffef9;border-radius:12px;padding:10px 6px;text-align:center;">
+      <div style="font-size:20px;">${icon}</div>
+      <div style="font-size:12px;font-weight:700;margin-top:2px;">${label}</div>
+      <div style="font-size:13px;font-weight:700;color:${met?'#2ED47A':'#FF5C5C'};margin-top:4px;">${total} / ${need}</div>
+      <div style="font-size:10.5px;color:${met?'#2ED47A':'#FF5C5C'};">${met?'✔達成':'あと'+(need-total)}</div>
     </div>`;
   };
-  const metCount = [baseTech+f.tech>=needTech, baseIdea+f.idea>=needIdea, baseCoop+f.coop>=needCoop].filter(Boolean).length;
+  const metCount = [baseTech>=needTech, baseIdea>=needIdea, baseCoop>=needCoop].filter(Boolean).length;
   const starGuess = metCount===3?5 : metCount===2?4 : metCount===1?3 : 2;
   const bonusNote = [];
   if(fresh) bonusNote.push(fresh.label);
   if(streakBonus>0) bonusNote.push(`🔁連続制作ボーナス+${streakBonus}`);
+
+  const memberRows = squad.map(m=>{
+    const favId = FAVORITE_ITEMS[m.id];
+    const favDef = favId ? getItemDef(favId) : null;
+    const have = favId ? (G.inventory[favId]||0) : 0;
+    const already = G.craftFlow.giftedIds.includes(m.id);
+    const stat = specialtyStatOf(m);
+    let statusText;
+    if(!favId) statusText = '好きなものは特になさそう';
+    else if(already) statusText = `${favDef.icon}を渡した（${statLabel[stat]}+3）`;
+    else if(have<=0) statusText = `${favDef.icon}${favDef.name}を持っていない`;
+    else statusText = `${favDef.icon}${favDef.name}を持っている（×${have}）`;
+    const canGive = favId && have>0 && !already;
+    return `<div class="shop-row">
+      <div class="sr-left"><span class="sr-icon">${m.emoji}</span><div><div class="sr-name">${m.name}</div><div class="sr-price">${statusText}</div></div></div>
+      ${canGive ? `<button class="mini-btn buy" data-giftmem="${m.id}">わたす</button>` : ''}
+    </div>`;
+  }).join('');
+
   openModal(`
-    <h2>💪 ④気合を入れる</h2>
-    <p class="mdesc">追加の予算を投じて、今回だけ能力値を底上げできる（合計最大${FOCUS_MAX}ポイント）。使った分は制作時に支払う。現在のコスト：💰${cost}<br>
-    <span style="color:#8a7a5f;">「必要」を超えている数が多いほど、作品の評価（★）が上がりやすい。赤字＝まだ足りていない能力を優先しよう。</span>${bonusNote.length?`<br><span style="color:#5C9EFF;font-weight:700;">${bonusNote.join('／')}</span>`:''}</p>
-    ${row('技術に集中','tech','💻', baseTech, needTech)}
-    ${row('発想に集中','idea','📝', baseIdea, needIdea)}
-    ${row('協調に集中','coop','🎤', baseCoop, needCoop)}
+    <h2>🎁 ④好きなものを渡す</h2>
+    <p class="mdesc">編成メンバーが好きなものを持っていれば、その場で渡して今回だけ得意分野を伸ばせる（ベルは使わない）。<br>
+    <span style="color:#8a7a5f;">「必要」を超えている数が多いほど、作品の評価（★）が上がりやすい。</span>${bonusNote.length?`<br><span style="color:#5C9EFF;font-weight:700;">${bonusNote.join('／')}</span>`:''}</p>
+    ${memberRows}
+    <div style="display:flex;gap:8px;margin-top:8px;">
+      ${statCol('技術', '💻', baseTech, needTech)}
+      ${statCol('発想', '📝', baseIdea, needIdea)}
+      ${statCol('協調', '🎤', baseCoop, needCoop)}
+    </div>
     <p class="mdesc" style="margin-top:8px;">現在の見込み：${'★'.repeat(starGuess)}${'☆'.repeat(5-starGuess)}（本番はここから多少ブレます）</p>
     <div class="btn-row" style="margin-top:10px;">
       <button class="mini-btn buy" id="nextTitle">次へ（タイトルを決める）▶</button>
       <button class="mini-btn" id="backSquad">もどる</button>
     </div>
   `);
-  document.querySelectorAll('[data-foc-plus]').forEach(btn=>{
+  document.querySelectorAll('[data-giftmem]').forEach(btn=>{
     btn.onclick = ()=>{
-      const key = btn.dataset.focPlus;
-      const tot = f.tech+f.idea+f.coop;
-      if(tot>=FOCUS_MAX || G.bells<(tot+1)*FOCUS_POINT_COST) return;
-      f[key]++;
-      renderFocusAllocate();
-    };
-  });
-  document.querySelectorAll('[data-foc-minus]').forEach(btn=>{
-    btn.onclick = ()=>{
-      const key = btn.dataset.focMinus;
-      if(f[key]>0) f[key]--;
+      const mid = btn.dataset.giftmem;
+      const m = squad.find(x=>x.id===mid);
+      const favId = FAVORITE_ITEMS[m.id];
+      if(!favId || (G.inventory[favId]||0)<=0) return;
+      G.inventory[favId] -= 1;
+      const stat = specialtyStatOf(m);
+      G.craftFlow.giftBonus[stat] += 3;
+      G.craftFlow.giftedIds.push(m.id);
+      const bank = GIFT_REACTIONS[m.personality] || ['ありがとう！'];
+      renderInventoryStrip(); saveGame();
+      showFlavorToast(`${m.emoji} ${randPick(bank)}`);
       renderFocusAllocate();
     };
   });
@@ -3439,14 +3710,11 @@ function renderQuirkSelect(){
 
 /* ---------- Step 7: safe vs risky, then produce ---------- */
 function renderGambleConfirm(){
-  const f = G.craftFlow.focusAlloc || {tech:0,idea:0,coop:0};
-  const focusCost = (f.tech+f.idea+f.coop)*FOCUS_POINT_COST;
-  const baseCost = 20;
-  const totalCost = baseCost + focusCost;
+  const totalCost = 20;
   const canAfford = G.bells >= totalCost;
   openModal(`
     <h2>🚦 ⑦制作方針を決める</h2>
-    <p class="mdesc">制作費 合計 💰${totalCost}（基本20＋気合${focusCost}）。仕上げ方を選んで発表しよう。</p>
+    <p class="mdesc">制作費 合計 💰${totalCost}。仕上げ方を選んで発表しよう。</p>
     <div class="gamble-box">
       <div class="gamble-card safe">
         <h3>🛡️ 堅実に仕上げる</h3>
@@ -3488,19 +3756,18 @@ function applyProductionGrowth(squad, project){
 }
 
 function produceWork(gamble){
-  const f = G.craftFlow.focusAlloc || {tech:0,idea:0,coop:0};
-  const focusCost = (f.tech+f.idea+f.coop)*FOCUS_POINT_COST;
-  const totalCost = 20 + focusCost;
+  const totalCost = 20; // 気合ポイントのベル消費は廃止（かわりに好きなものを渡す方式）
   if(G.bells < totalCost) return;
   G.bells -= totalCost;
   const squad = G.studio.filter(m=>G.craftFlow.squadIds.includes(m.id));
   const project = G.craftFlow.project;
   const fresh = freshnessInfoFor(project.name);
   const streakBonus = currentStreakBonusFor(project.name);
+  const giftBonus = G.craftFlow.giftBonus || {tech:0, idea:0, coop:0};
   const isSequelChoice = !!(G.craftFlow.titleChoice && G.craftFlow.titleChoice.isSequel);
   const sequelOf = isSequelChoice ? G.gallery[G.gallery.length-1] : null;
   const work = generateVillageWork(project, squad, {
-    style: G.craftFlow.style, focusAlloc: f, titleChoice: G.craftFlow.titleChoice,
+    style: G.craftFlow.style, focusAlloc: giftBonus, titleChoice: G.craftFlow.titleChoice,
     quirkChoice: G.craftFlow.quirkChoice, gamble, fresh, streakBonus, sequelOf,
   });
   work.growth = applyProductionGrowth(squad, project);
@@ -3539,7 +3806,7 @@ function workDetailHTML(work){
                  work.gambleResult==='lose' ? `<div class="result-banner lose">💥 空回りしてしまった…</div>` : '';
   const reactions = work.reactions || [];
   const specialBadges = [];
-  if(work.isSequel) specialBadges.push(`<span style="background:#B98CFF;color:#fff;padding:2px 8px;border-radius:8px;font-size:11px;font-weight:700;">📖シリーズ続編</span>`);
+  if(work.isSequel) specialBadges.push(`<span style="background:#B98CFF;color:#fff;padding:2px 8px;border-radius:8px;font-size:11px;font-weight:700;">📖シリーズ続編（${work.seriesNumber}作目）</span>`);
   if(work.freshTier) specialBadges.push(`<span style="background:${work.freshTier==='high'?'#3FA35C':'#7AAE5C'};color:#fff;padding:2px 8px;border-radius:8px;font-size:11px;font-weight:700;">${work.freshTier==='high'?'🌱新鮮':'🌿少し新鮮'}</span>`);
   if(work.streakBonus) specialBadges.push(`<span style="background:#5C9EFF;color:#fff;padding:2px 8px;border-radius:8px;font-size:11px;font-weight:700;">🔁連続ボーナス+${work.streakBonus}</span>`);
   (work.synergies||[]).forEach(sp=> specialBadges.push(`<span style="background:#8FBF7F;color:#fff;padding:2px 8px;border-radius:8px;font-size:11px;font-weight:700;">✨${sp.label}</span>`));
