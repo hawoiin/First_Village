@@ -129,8 +129,9 @@
     display:none;white-space:nowrap;z-index:5;
   }
   .toast-bubble{
-    top:44px;background:#2b2038;color:#F2EFE7;white-space:normal;max-width:88%;
-    text-align:center;line-height:1.5;z-index:6;border-radius:14px;
+    position:fixed;top:16px;left:50%;transform:translateX(-50%);
+    background:#2b2038;color:#F2EFE7;white-space:normal;max-width:340px;width:88%;
+    text-align:center;line-height:1.5;z-index:70;border-radius:14px;
   }
 
   .controls-row{display:flex;justify-content:space-between;align-items:flex-end;margin-top:10px;gap:10px;flex-wrap:wrap;}
@@ -286,10 +287,13 @@
 
   /* ---------- Song Composer ---------- */
   .composer-row{display:flex;align-items:center;gap:2px;margin-bottom:2px;}
-  .composer-label{width:20px;font-size:10px;color:#8a7a5f;text-align:right;margin-right:4px;flex-shrink:0;}
+  .composer-label{width:52px;font-size:10px;color:#8a7a5f;text-align:right;margin-right:4px;flex-shrink:0;white-space:nowrap;}
+  .composer-label.chord-label{font-size:9px;line-height:1.15;white-space:normal;}
+  .composer-label.drum-label{font-size:10px;}
   .composer-cell{width:21px;height:21px;border-radius:4px;background:#EFE6D0;border:1px solid #ddcf9f;cursor:pointer;flex-shrink:0;padding:0;}
   .composer-cell.active{background:var(--accent);border-color:var(--accent);}
   .composer-cell.drum-cell.active{background:#5A6B8C;border-color:#5A6B8C;}
+  .composer-cell.chord-cell.active{background:#B98CFF;border-color:#B98CFF;}
   .composer-cell.playhead{box-shadow:0 0 0 2px #4A90D9 inset;}
   .composer-controls{display:flex;gap:8px;align-items:center;margin:10px 0;flex-wrap:wrap;font-size:12px;}
   .composer-controls select, .composer-controls input[type=range]{font-family:inherit;}
@@ -2841,18 +2845,41 @@ const SOUND_GAME_NOTES = [
 ];
 let soundGame = null;
 
+let soundGameMode = 'note'; // 'note' | 'chord'
+const SOUND_GAME_CHORD_COLORS = ['#FF9F6B','#FFC96B','#6FAE5C','#8FD3E8'];
+function soundGamePalette(){
+  if(soundGameMode==='chord'){
+    const chords = CHORD_DEFS.pentatonic;
+    const notes = scaleNotes('pentatonic');
+    return chords.map((c,i)=>({
+      label: c.name.split('（')[0],
+      color: SOUND_GAME_CHORD_COLORS[i % SOUND_GAME_CHORD_COLORS.length],
+      play: ()=> c.rows.forEach(r=>playTone(notes[r].freq, 0.4, 'sine', 0.3)),
+    }));
+  }
+  return SOUND_GAME_NOTES.map(n=>({
+    label: n.name, color: n.color,
+    play: ()=> playTone(n.freq, 0.32, 'sine', 0.35),
+  }));
+}
+
 function renderSoundGameModal(){
   soundGame = null;
   const best = G.soundGameHighScore || 0;
-  const buttons = SOUND_GAME_NOTES.map((n,i)=>`
-    <button class="sg-btn" id="sgBtn${i}" data-sg="${i}" style="--sg-color:${n.color};">${n.name}</button>
+  const palette = soundGamePalette();
+  const buttons = palette.map((n,i)=>`
+    <button class="sg-btn" id="sgBtn${i}" data-sg="${i}" style="--sg-color:${n.color};">${n.label}</button>
   `).join('');
   openModal(`
     <h2>🎧 音あてゲーム</h2>
-    <p class="mdesc">鳴った音の順番をよく聞いて、同じ順にタップしよう。正解するたびに1音ずつ長くなっていくよ。<br>自己ベスト：${best}回</p>
+    <p class="mdesc">鳴った${soundGameMode==='chord'?'和音':'音'}の順番をよく聞いて、同じ順にタップしよう。正解するたびに1つずつ長くなっていくよ。<br>自己ベスト：${best}回</p>
+    <div class="btn-row" style="margin-bottom:8px;">
+      <button class="mini-btn ${soundGameMode==='note'?'buy':''}" id="sgModeNote">🎵単音モード</button>
+      <button class="mini-btn ${soundGameMode==='chord'?'buy':''}" id="sgModeChord">🎹和音モード</button>
+    </div>
     <p class="mdesc" id="soundGameStatus" style="font-weight:700;color:var(--wood-d);text-align:center;font-size:14px;">「はじめる」を押してね</p>
     <div id="soundGameRound" style="text-align:center;font-size:12px;color:#8a7a5f;margin-bottom:8px;"></div>
-    <div class="sg-grid">${buttons}</div>
+    <div class="sg-grid" style="grid-template-columns:repeat(${palette.length},1fr);">${buttons}</div>
     <div class="btn-row" style="margin-top:14px;">
       <button class="mini-btn buy" id="sgStart">はじめる</button>
       <button class="mini-btn" id="sgReplay" disabled>🔁もう一度聞く</button>
@@ -2865,6 +2892,8 @@ function renderSoundGameModal(){
   document.getElementById('sgStart').onclick = startSoundGame;
   document.getElementById('sgReplay').onclick = replaySoundGameSequence;
   document.getElementById('closeSoundGame').onclick = closeModal;
+  document.getElementById('sgModeNote').onclick = ()=>{ soundGameMode='note'; renderSoundGameModal(); };
+  document.getElementById('sgModeChord').onclick = ()=>{ soundGameMode='chord'; renderSoundGameModal(); };
 }
 
 function startSoundGame(){
@@ -2881,12 +2910,13 @@ function setReplayEnabled(on){
 }
 
 function nextSoundGameRound(){
-  soundGame.sequence.push(Math.floor(Math.random()*SOUND_GAME_NOTES.length));
+  const palette = soundGamePalette();
+  soundGame.sequence.push(Math.floor(Math.random()*palette.length));
   soundGame.playerIndex = 0;
   soundGame.locked = true;
   setReplayEnabled(false);
   const roundEl = document.getElementById('soundGameRound');
-  if(roundEl) roundEl.textContent = `${soundGame.sequence.length}音目`;
+  if(roundEl) roundEl.textContent = `${soundGame.sequence.length}${soundGameMode==='chord'?'和音目':'音目'}`;
   playSoundGameSequence();
 }
 
@@ -2905,6 +2935,7 @@ function flashSoundGameButton(i, on){
 
 function playSoundGameSequence(){
   const seq = soundGame.sequence;
+  const palette = soundGamePalette();
   const statusEl = document.getElementById('soundGameStatus');
   if(statusEl) statusEl.textContent = 'よく聞いてね…';
   let i = 0;
@@ -2917,9 +2948,9 @@ function playSoundGameSequence(){
       if(st) st.textContent = '同じ順番でタップしてね';
       return;
     }
-    playTone(SOUND_GAME_NOTES[seq[i]].freq, 0.32, 'sine', 0.35);
+    palette[seq[i]].play();
     i++;
-    setTimeout(step, 550);
+    setTimeout(step, 700);
   };
   setTimeout(step, 500);
 }
@@ -2927,8 +2958,9 @@ function playSoundGameSequence(){
 function handleSoundGameInput(i){
   if(!soundGame || soundGame.locked) return;
   const seq = soundGame.sequence;
+  const palette = soundGamePalette();
   flashSoundGameButton(i, true);
-  playTone(SOUND_GAME_NOTES[i].freq, 0.25, 'sine', 0.35);
+  palette[i].play();
   setTimeout(()=>flashSoundGameButton(i, false), 220);
   if(seq[soundGame.playerIndex] !== i){
     soundGameOver(seq[soundGame.playerIndex], i);
@@ -2946,14 +2978,15 @@ function handleSoundGameInput(i){
 
 function soundGameOver(expectedIdx, givenIdx){
   const seq = soundGame.sequence;
+  const palette = soundGamePalette();
   const score = seq.length - 1;
   const statusEl = document.getElementById('soundGameStatus');
   const isNewBest = score > (G.soundGameHighScore||0);
   if(isNewBest){ G.soundGameHighScore = score; saveGame(); }
   let msg = isNewBest ? `✨自己ベスト更新！${score}回まで正解！` : `ざんねん…${score}回まで正解。`;
   if(expectedIdx!=null){
-    const seqNames = seq.map(idx=>SOUND_GAME_NOTES[idx].name).join('→');
-    msg += `<br>正解は「${seqNames}」。${score+1}番目は「${SOUND_GAME_NOTES[expectedIdx].name}」だったよ（押したのは「${SOUND_GAME_NOTES[givenIdx].name}」）。`;
+    const seqNames = seq.map(idx=>palette[idx].label).join('→');
+    msg += `<br>正解は「${seqNames}」。${score+1}番目は「${palette[expectedIdx].label}」だったよ（押したのは「${palette[givenIdx].label}」）。`;
   }
   if(statusEl) statusEl.innerHTML = msg;
   playTone(196.00, 0.5, 'sine', 0.3);
@@ -2981,6 +3014,13 @@ const NOTE_SCALES = {
       {name:'ファ', freq:349.23}, {name:'ミ', freq:329.63}, {name:'レ', freq:293.66}, {name:'ド', freq:261.63},
     ],
   },
+  forgotten: {
+    label: '忘れられた音階（8音）', shortLabel:'？',
+    notes: [
+      {name:'シ', freq:493.88}, {name:'ラ', freq:440.00}, {name:'ラ♭', freq:415.30}, {name:'ソ♭', freq:369.99},
+      {name:'ファ', freq:349.23}, {name:'ミ♭', freq:311.13}, {name:'レ', freq:293.66}, {name:'ド', freq:261.63},
+    ],
+  },
 };
 function scaleNotes(scaleId){ return (NOTE_SCALES[scaleId]||NOTE_SCALES.pentatonic).notes; }
 const SONG_STEPS = 16;
@@ -2988,18 +3028,31 @@ const SONG_INSTRUMENTS = [
   {id:'sine', name:'まる〜い音'}, {id:'triangle', name:'やわらかい音'},
   {id:'square', name:'ピコピコ音'}, {id:'sawtooth', name:'するどい音'},
 ];
-const CHORD_LECTURE = [
-  {name:'ド・ミ・ソ（明るい和音）', rows:[7,5,4], desc:'一番おさまりのいい和音。曲の始まりや終わりに置くと落ち着く。', scale:'pentatonic'},
-  {name:'ラ・ド・ミ（切ない和音）', rows:[3,2,0], desc:'少ししんみりした響き。盛り上がりの後や、しみじみした場面に。', scale:'pentatonic'},
-  {name:'レ・ソ（浮遊感の2音）', rows:[6,4], desc:'2音だけの軽い和音。次の和音へつなぐ「橋」として使いやすい。', scale:'pentatonic'},
-  {name:'ド・ソ（安定の2音）', rows:[7,4], desc:'和音というより土台。メロディの下に敷くと安心感が出る。', scale:'pentatonic'},
-];
+const CHORD_DEFS = {
+  pentatonic: [
+    {name:'ド・ミ・ソ（明るい和音）', rows:[7,5,4], desc:'一番おさまりのいい和音。曲の始まりや終わりに置くと落ち着く。'},
+    {name:'ラ・ド・ミ（切ない和音）', rows:[3,2,0], desc:'少ししんみりした響き。盛り上がりの後や、しみじみした場面に。'},
+    {name:'レ・ソ（浮遊感の2音）', rows:[6,4], desc:'2音だけの軽い和音。次の和音へつなぐ「橋」として使いやすい。'},
+    {name:'ド・ソ（安定の2音）', rows:[7,4], desc:'和音というより土台。メロディの下に敷くと安心感が出る。'},
+  ],
+  diatonic: [
+    {name:'ド・ミ・ソ（明るい和音）', rows:[7,5,3], desc:'一番おさまりのいい和音。曲の始まりや終わりに置くと落ち着く。'},
+    {name:'ラ・ド・ミ（切ない和音）', rows:[2,7,5], desc:'少ししんみりした響き。盛り上がりの後や、しみじみした場面に。'},
+    {name:'ソ・シ・レ（次へ進みたくなる和音）', rows:[3,1,6], desc:'落ち着かない響きで、次の和音に進みたくなる。盛り上げたい場面に。'},
+    {name:'ファ・ラ・ド（やわらかい和音）', rows:[4,2,0], desc:'やさしく包み込むような響き。'},
+  ],
+  forgotten: [
+    {name:'ラ・ミ♭・ド（据わりの悪い和音）', rows:[1,5,7], desc:'……これは、あまり長く弾かない方がいいかもしれない。'},
+  ],
+};
+function chordsForScale(scaleId){ return CHORD_DEFS[scaleId] || CHORD_DEFS.pentatonic; }
 const DRUM_KIT = [
   {id:'kick', name:'バスドラム'},
   {id:'snare', name:'スネア'},
   {id:'hihat', name:'ハイハット'},
 ];
 let composerGrid = null, composerDrumGrid = null, composerTempo = 100, composerInstrument = 'sine', composerTitle = '', composerScale = 'pentatonic';
+let composerGridB = null, composerDrumGridB = null, composerUseSections = false, composerSection = 'A';
 let composerTimer = null, composerStep = 0;
 let sharedAudioCtx = null;
 
@@ -3017,8 +3070,12 @@ function playTone(freq, seconds, type, vol, ctxArg, when){
     osc.type = type || 'sine';
     osc.frequency.value = freq;
     const peak = vol!=null ? vol : 0.22;
+    // 音の長さに関わらずリリースは一定の短さに保ち、短い音でも痩せて聞こえないようにする
+    const release = Math.min(0.09, Math.max(0.03, seconds*0.35));
+    const sustainEnd = Math.max(startAt+0.02, startAt+seconds-release);
     gain.gain.setValueAtTime(0.0001, startAt);
     gain.gain.exponentialRampToValueAtTime(peak, startAt+0.02);
+    gain.gain.setValueAtTime(peak, sustainEnd);
     gain.gain.exponentialRampToValueAtTime(0.0001, startAt+seconds);
     osc.connect(gain); gain.connect(ctx.destination);
     osc.start(startAt);
@@ -3077,6 +3134,15 @@ function makeEmptyGrid(){
 function makeEmptyDrumGrid(){
   return Array.from({length:DRUM_KIT.length}, ()=>Array(SONG_STEPS).fill(false));
 }
+// パターン展開（A→B）対応：song風オブジェクト {grid,drumGrid,gridB,drumGridB,useSections} を渡すと
+// 通し番号のステップ数と、そのステップがどちらのセクションのどのマスかを教えてくれる
+function songTotalSteps(song){
+  return song.useSections ? SONG_STEPS*2 : SONG_STEPS;
+}
+function songStepData(song, globalStep){
+  if(!song.useSections || globalStep < SONG_STEPS) return {grid:song.grid, drumGrid:song.drumGrid, localStep: globalStep % SONG_STEPS, section:'A'};
+  return {grid:song.gridB, drumGrid:song.drumGridB, localStep: globalStep - SONG_STEPS, section:'B'};
+}
 
 /* ---------- 曲のダウンロード（WAV書き出し） ---------- */
 function wavWriteString(view, offset, str){
@@ -3115,17 +3181,19 @@ async function exportSongAsWav(song){
   if(!OfflineCtx) throw new Error('OfflineAudioContext unavailable');
   const notes = scaleNotes(song.scale);
   const stepSec = 60/song.tempo/2;
-  const duration = SONG_STEPS*stepSec + 0.5;
+  const totalSteps = songTotalSteps(song);
+  const duration = totalSteps*stepSec + 0.5;
   const sampleRate = 44100;
   const offlineCtx = new OfflineCtx(1, Math.ceil(sampleRate*duration), sampleRate);
-  for(let step=0; step<SONG_STEPS; step++){
-    const when = step*stepSec;
+  for(let g=0; g<totalSteps; g++){
+    const when = g*stepSec;
+    const {grid, drumGrid, localStep} = songStepData(song, g);
     for(let row=0; row<notes.length; row++){
-      if(song.grid[row][step]) playTone(notes[row].freq, stepSec*0.9, song.instrument, 0.5, offlineCtx, when);
+      if(grid[row][localStep]) playTone(notes[row].freq, stepSec*0.9, song.instrument, 0.5, offlineCtx, when);
     }
-    if(song.drumGrid){
+    if(drumGrid){
       for(let row=0; row<DRUM_KIT.length; row++){
-        if(song.drumGrid[row] && song.drumGrid[row][step]) playDrum(DRUM_KIT[row].id, 0.6, offlineCtx, when);
+        if(drumGrid[row] && drumGrid[row][localStep]) playDrum(DRUM_KIT[row].id, 0.6, offlineCtx, when);
       }
     }
   }
@@ -3144,25 +3212,43 @@ function stopComposerPlayback(){
   if(composerTimer){ clearInterval(composerTimer); composerTimer = null; }
   document.querySelectorAll('.composer-cell.playhead').forEach(c=>c.classList.remove('playhead'));
 }
-function startComposerPlayback(grid, tempo, instrument, scaleId, drumGrid){
+function startComposerPlayback(grid, tempo, instrument, scaleId, drumGrid, gridB, drumGridB, useSections){
   stopBGM();
   stopComposerPlayback();
   const notes = scaleNotes(scaleId || composerScale);
-  const drums = drumGrid || composerDrumGrid;
+  const songLike = {
+    grid: grid || composerGrid, drumGrid: drumGrid || composerDrumGrid,
+    gridB: gridB!==undefined ? gridB : composerGridB,
+    drumGridB: drumGridB!==undefined ? drumGridB : composerDrumGridB,
+    useSections: useSections!==undefined ? useSections : composerUseSections,
+  };
+  const totalSteps = songTotalSteps(songLike);
   composerStep = 0;
   const stepSec = 60/tempo/2;
   composerTimer = setInterval(()=>{
     document.querySelectorAll('.composer-cell.playhead').forEach(c=>c.classList.remove('playhead'));
-    document.querySelectorAll(`.composer-cell[data-step="${composerStep}"]`).forEach(c=>c.classList.add('playhead'));
-    for(let row=0; row<notes.length; row++){
-      if(grid[row][composerStep]) playTone(notes[row].freq, stepSec*0.9, instrument);
+    const {grid:stepGrid, drumGrid:stepDrums, localStep, section} = songStepData(songLike, composerStep);
+    if(songLike.useSections && section!==composerSection && document.getElementById('composerGridWrap')){
+      composerSection = section;
+      document.getElementById('composerGridWrap').innerHTML = composerGridHTML();
+      document.getElementById('composerChordWrap').innerHTML = composerChordGridHTML();
+      document.getElementById('composerDrumWrap').innerHTML = composerDrumGridHTML();
+      const secA = document.getElementById('sectionA'), secB = document.getElementById('sectionB');
+      if(secA) secA.classList.toggle('buy', composerSection==='A');
+      if(secB) secB.classList.toggle('buy', composerSection==='B');
     }
-    if(drums){
+    document.querySelectorAll(`.composer-cell[data-step="${localStep}"]`).forEach(c=>c.classList.add('playhead'));
+    const sectionLabel = document.getElementById('composerSectionPlaying');
+    if(sectionLabel) sectionLabel.textContent = songLike.useSections ? `▶ ${section}パターン再生中` : '';
+    for(let row=0; row<notes.length; row++){
+      if(stepGrid[row][localStep]) playTone(notes[row].freq, stepSec*0.9, instrument);
+    }
+    if(stepDrums){
       for(let row=0; row<DRUM_KIT.length; row++){
-        if(drums[row] && drums[row][composerStep]) playDrum(DRUM_KIT[row].id);
+        if(stepDrums[row] && stepDrums[row][localStep]) playDrum(DRUM_KIT[row].id);
       }
     }
-    composerStep = (composerStep+1) % SONG_STEPS;
+    composerStep = (composerStep+1) % totalSteps;
   }, stepSec*1000);
 }
 
@@ -3174,19 +3260,21 @@ function startBGM(song){
   stopComposerPlayback();
   stopBGM();
   const notes = scaleNotes(song.scale);
+  const totalSteps = songTotalSteps(song);
   bgmStep = 0;
   bgmPlaying = true;
   const stepSec = 60/song.tempo/2;
   bgmTimer = setInterval(()=>{
+    const {grid, drumGrid, localStep} = songStepData(song, bgmStep);
     for(let row=0; row<notes.length; row++){
-      if(song.grid[row][bgmStep]) playTone(notes[row].freq, stepSec*0.85, song.instrument, 0.11);
+      if(grid[row][localStep]) playTone(notes[row].freq, stepSec*0.85, song.instrument, 0.11);
     }
-    if(song.drumGrid){
+    if(drumGrid){
       for(let row=0; row<DRUM_KIT.length; row++){
-        if(song.drumGrid[row] && song.drumGrid[row][bgmStep]) playDrum(DRUM_KIT[row].id, 0.14);
+        if(drumGrid[row] && drumGrid[row][localStep]) playDrum(DRUM_KIT[row].id, 0.14);
       }
     }
-    bgmStep = (bgmStep+1) % SONG_STEPS;
+    bgmStep = (bgmStep+1) % totalSteps;
   }, stepSec*1000);
   renderGameShellTop();
 }
@@ -3207,20 +3295,44 @@ function refreshBgmForCurrentPhase(){
   else stopBGM();
 }
 
+function activeMelodyGrid(){ return composerSection==='B' ? composerGridB : composerGrid; }
+function activeDrumGrid(){ return composerSection==='B' ? composerDrumGridB : composerDrumGrid; }
+
+function isChordActive(chordDef, step){
+  const grid = activeMelodyGrid();
+  return chordDef.rows.every(r=>grid[r][step]);
+}
+function toggleChordAtStep(chordDef, step){
+  const grid = activeMelodyGrid();
+  const active = isChordActive(chordDef, step);
+  chordDef.rows.forEach(r=>{ grid[r][step] = !active; });
+}
+
 function composerGridHTML(){
   const notes = scaleNotes(composerScale);
+  const grid = activeMelodyGrid();
   return notes.map((note,row)=>`
     <div class="composer-row">
       <span class="composer-label">${note.name}</span>
-      ${Array.from({length:SONG_STEPS}, (_,step)=>`<button class="composer-cell${composerGrid[row][step]?' active':''}" data-row="${row}" data-step="${step}"></button>`).join('')}
+      ${Array.from({length:SONG_STEPS}, (_,step)=>`<button class="composer-cell${grid[row][step]?' active':''}" data-row="${row}" data-step="${step}"></button>`).join('')}
     </div>
   `).join('');
 }
 function composerDrumGridHTML(){
+  const grid = activeDrumGrid();
   return DRUM_KIT.map((d,row)=>`
     <div class="composer-row">
-      <span class="composer-label">${d.name}</span>
-      ${Array.from({length:SONG_STEPS}, (_,step)=>`<button class="composer-cell drum-cell${composerDrumGrid[row][step]?' active':''}" data-drow="${row}" data-dstep="${step}"></button>`).join('')}
+      <span class="composer-label drum-label">${d.name}</span>
+      ${Array.from({length:SONG_STEPS}, (_,step)=>`<button class="composer-cell drum-cell${grid[row][step]?' active':''}" data-drow="${row}" data-dstep="${step}"></button>`).join('')}
+    </div>
+  `).join('');
+}
+function composerChordGridHTML(){
+  const chords = chordsForScale(composerScale);
+  return chords.map((c,ci)=>`
+    <div class="composer-row">
+      <span class="composer-label chord-label">${c.name.split('（')[0]}</span>
+      ${Array.from({length:SONG_STEPS}, (_,step)=>`<button class="composer-cell chord-cell${isChordActive(c,step)?' active':''}" data-crow="${ci}" data-cstep="${step}"></button>`).join('')}
     </div>
   `).join('');
 }
@@ -3231,6 +3343,10 @@ function renderComposer(existingSong){
   composerEditingSong = existingSong || null;
   composerGrid = existingSong ? existingSong.grid.map(r=>[...r]) : makeEmptyGrid();
   composerDrumGrid = existingSong && existingSong.drumGrid ? existingSong.drumGrid.map(r=>[...r]) : makeEmptyDrumGrid();
+  composerUseSections = existingSong ? !!existingSong.useSections : false;
+  composerGridB = existingSong && existingSong.gridB ? existingSong.gridB.map(r=>[...r]) : makeEmptyGrid();
+  composerDrumGridB = existingSong && existingSong.drumGridB ? existingSong.drumGridB.map(r=>[...r]) : makeEmptyDrumGrid();
+  composerSection = 'A';
   composerTempo = existingSong ? existingSong.tempo : 100;
   composerInstrument = existingSong ? existingSong.instrument : 'sine';
   composerTitle = existingSong ? existingSong.title : '';
@@ -3241,9 +3357,16 @@ function renderComposer(existingSong){
 function renderComposerUI(){
   stopComposerPlayback();
   const backToList = ()=>{ stopComposerPlayback(); renderSongListModal(); };
+  const sectionSwitchHTML = composerUseSections ? `
+    <div class="btn-row" style="margin:8px 0;">
+      <button class="mini-btn ${composerSection==='A'?'buy':''}" id="sectionA">Aパターンを編集</button>
+      <button class="mini-btn ${composerSection==='B'?'buy':''}" id="sectionB">Bパターンを編集</button>
+    </div>
+    <p class="mdesc" id="composerSectionPlaying" style="text-align:center;color:#5C9EFF;font-weight:700;"></p>
+  ` : '';
   openModal(`
     <h2>🎵 曲をつくる</h2>
-    <p class="mdesc">マス目をタップして音を置こう。▶で再生できるよ。和音の組み方に迷ったら「和音のコツ」も見てみて。</p>
+    <p class="mdesc">${composerScale==='forgotten' ? 'マス目をタップして音を置こう。……この音階、なぜか指が覚えているような気がする。' : 'マス目をタップして音を置こう。▶で再生できるよ。和音の組み方に迷ったら「和音のコツ」も見てみて。'}</p>
     <div class="start-field">
       <label>曲のタイトル</label>
       <input id="songTitle" placeholder="れい：村の朝" maxlength="12" value="${composerTitle.replace(/"/g,'&quot;')}">
@@ -3253,7 +3376,14 @@ function renderComposerUI(){
       <label>音色：<select id="songInstrument">${SONG_INSTRUMENTS.map(ins=>`<option value="${ins.id}" ${ins.id===composerInstrument?'selected':''}>${ins.name}</option>`).join('')}</select></label>
       <label>速さ：<input type="range" id="songTempo" min="60" max="180" step="10" value="${composerTempo}"><span id="songTempoVal">${composerTempo}</span></label>
     </div>
+    <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;margin:8px 0;">
+      <input type="checkbox" id="songUseSections" ${composerUseSections?'checked':''}>
+      🎼 パターン展開を使う（Aパターン→Bパターンで曲を作る・上級者向け）
+    </label>
+    ${sectionSwitchHTML}
     <div id="composerGridWrap">${composerGridHTML()}</div>
+    <p class="mdesc" style="margin:10px 0 4px;">🎹 コード（タップで和音を置く）</p>
+    <div id="composerChordWrap">${composerChordGridHTML()}</div>
     <p class="mdesc" style="margin:10px 0 4px;">🥁 ドラム</p>
     <div id="composerDrumWrap">${composerDrumGridHTML()}</div>
     <div class="btn-row" style="margin-top:12px;">
@@ -3271,14 +3401,28 @@ function renderComposerUI(){
     const cell = e.target.closest('.composer-cell');
     if(!cell) return;
     const row = Number(cell.dataset.row), step = Number(cell.dataset.step);
-    composerGrid[row][step] = !composerGrid[row][step];
+    const grid = activeMelodyGrid();
+    grid[row][step] = !grid[row][step];
     cell.classList.toggle('active');
+    if(grid[row][step]) playTone(scaleNotes(composerScale)[row].freq, 0.35, composerInstrument);
+    document.getElementById('composerChordWrap').innerHTML = composerChordGridHTML();
+  });
+  document.getElementById('composerChordWrap').addEventListener('click', (e)=>{
+    const cell = e.target.closest('.composer-cell');
+    if(!cell) return;
+    const ci = Number(cell.dataset.crow), step = Number(cell.dataset.cstep);
+    const chord = chordsForScale(composerScale)[ci];
+    toggleChordAtStep(chord, step);
+    chord.rows.forEach(r=>playTone(scaleNotes(composerScale)[r].freq, 0.5, composerInstrument));
+    document.getElementById('composerGridWrap').innerHTML = composerGridHTML();
+    document.getElementById('composerChordWrap').innerHTML = composerChordGridHTML();
   });
   document.getElementById('composerDrumWrap').addEventListener('click', (e)=>{
     const cell = e.target.closest('.composer-cell');
     if(!cell) return;
     const row = Number(cell.dataset.drow), step = Number(cell.dataset.dstep);
-    composerDrumGrid[row][step] = !composerDrumGrid[row][step];
+    const grid = activeDrumGrid();
+    grid[row][step] = !grid[row][step];
     cell.classList.toggle('active');
   });
   document.getElementById('songTitle').oninput = (e)=>{ composerTitle = e.target.value; };
@@ -3293,24 +3437,42 @@ function renderComposerUI(){
     document.getElementById('songTempoVal').textContent = composerTempo;
     if(composerTimer) startComposerPlayback(composerGrid, composerTempo, composerInstrument, composerScale);
   };
+  document.getElementById('songUseSections').onchange = (e)=>{
+    composerUseSections = e.target.checked;
+    stopComposerPlayback();
+    renderComposerUI();
+  };
+  const secA = document.getElementById('sectionA'), secB = document.getElementById('sectionB');
+  if(secA) secA.onclick = ()=>{ composerSection='A'; renderComposerUI(); };
+  if(secB) secB.onclick = ()=>{ composerSection='B'; renderComposerUI(); };
   document.getElementById('songPlay').onclick = ()=> startComposerPlayback(composerGrid, composerTempo, composerInstrument, composerScale);
   document.getElementById('songStop').onclick = stopComposerPlayback;
   document.getElementById('songLecture').onclick = ()=> renderChordLecture();
   document.getElementById('songSave').onclick = ()=>{
     const title = document.getElementById('songTitle').value.trim() || '無題の曲';
-    const hasNote = composerGrid.some(row=>row.some(v=>v)) || composerDrumGrid.some(row=>row.some(v=>v));
+    const hasNote = composerGrid.some(row=>row.some(v=>v)) || composerDrumGrid.some(row=>row.some(v=>v))
+      || (composerUseSections && (composerGridB.some(row=>row.some(v=>v)) || composerDrumGridB.some(row=>row.some(v=>v))));
     if(!hasNote){ showFlavorToast('まだ音が置かれていないみたい。'); return; }
     if(composerEditingSong){
       composerEditingSong.title = title; composerEditingSong.grid = composerGrid.map(r=>[...r]);
       composerEditingSong.tempo = composerTempo; composerEditingSong.instrument = composerInstrument;
       composerEditingSong.scale = composerScale; composerEditingSong.drumGrid = composerDrumGrid.map(r=>[...r]);
+      composerEditingSong.useSections = composerUseSections;
+      composerEditingSong.gridB = composerGridB.map(r=>[...r]);
+      composerEditingSong.drumGridB = composerDrumGridB.map(r=>[...r]);
     } else {
       G.songs.push({
         id:'song_'+Date.now()+'_'+Math.floor(Math.random()*1000),
         title, grid: composerGrid.map(r=>[...r]), tempo: composerTempo, instrument: composerInstrument, day: G.day,
         scale: composerScale, drumGrid: composerDrumGrid.map(r=>[...r]),
+        useSections: composerUseSections, gridB: composerGridB.map(r=>[...r]), drumGridB: composerDrumGridB.map(r=>[...r]),
       });
       G.popularity += 2;
+      if(G.songs.length % 10 === 0){
+        setTimeout(()=>{
+          showFlavorToast(`🎶 ふと、これまでに作った${G.songs.length}曲を思い返す。曲を並べてみると、村での暮らしがゆっくり移り変わってきたのが分かる気がした。`);
+        }, 2600);
+      }
     }
     saveGame();
     showFlavorToast(`🎵「${title}」を保存した！`);
@@ -3320,14 +3482,49 @@ function renderComposerUI(){
   document.getElementById('songBack').onclick = backToList;
 }
 
+let freePlayLog = [];
+function buildGridsFromChordLog(log, scaleId){
+  // 16マス（Aパターン）に収まらない分は、自動でBパターンに続ける（最大32マスまで）
+  const gridA = makeEmptyGrid(), gridB = makeEmptyGrid();
+  const chords = chordsForScale(scaleId);
+  if(!log.length) return {gridA, gridB, usedB:false};
+  const stepSec = 60/composerTempo/2;
+  let step = 0, usedB = false;
+  log.forEach((entry, idx)=>{
+    if(idx>0){
+      const gapSec = (entry.t - log[idx-1].t)/1000;
+      const gapSteps = Math.max(1, Math.round(gapSec/stepSec));
+      step += gapSteps;
+    }
+    if(step >= SONG_STEPS*2) return; // A+Bあわせて32マスまで
+    const chord = chords[entry.ci];
+    if(!chord) return;
+    if(step < SONG_STEPS){
+      chord.rows.forEach(r=>{ gridA[r][step] = true; });
+    } else {
+      usedB = true;
+      chord.rows.forEach(r=>{ gridB[r][step-SONG_STEPS] = true; });
+    }
+  });
+  return {gridA, gridB, usedB};
+}
+function updateFreePlayUI(){
+  const statusEl = document.getElementById('freePlayStatus');
+  const btnWrap = document.getElementById('freePlayBtnWrap');
+  if(statusEl) statusEl.textContent = freePlayLog.length ? `🎶 ここまで弾いた和音：${freePlayLog.length}個` : '';
+  if(btnWrap) btnWrap.style.display = freePlayLog.length>=4 ? 'flex' : 'none';
+}
+
 function renderChordLecture(backFn){
   stopComposerPlayback();
   stopBGM();
+  freePlayLog = [];
   const back = backFn || renderComposerUI;
+  const chords = chordsForScale(composerScale);
   openModal(`
     <h2>🎓 和音のコツ</h2>
-    <p class="mdesc">同じマス（同じタイミング）に複数の音を置くと「和音」になるよ。まずは下の組み合わせをきいてみよう。</p>
-    ${CHORD_LECTURE.map((c,i)=>`
+    <p class="mdesc">同じマス（同じタイミング）に複数の音を置くと「和音」になるよ。まずは下の組み合わせをきいてみよう（今の音階：${NOTE_SCALES[composerScale].shortLabel}）。</p>
+    ${chords.map((c,i)=>`
       <div class="song-row">
         <div class="sr-left"><span class="sr-icon">🎹</span><div><div class="sr-name">${c.name}</div><div class="sr-price">${c.desc}</div></div></div>
         <button class="mini-btn buy" data-chord="${i}">きく</button>
@@ -3336,16 +3533,46 @@ function renderChordLecture(backFn){
     <p class="mdesc" style="margin-top:10px;line-height:1.8;">💡 コツ<br>
     ・和音は曲の「始まり」と「終わり」に置くと落ち着いて聞こえるよ。<br>
     ・全部のマスを音で埋めず、あえて何も置かないマスを作るとリズムが生まれるよ。<br>
-    ・このマス目は「ヨナ抜き音階」という、どの音を組み合わせても大きく外れにくい音階でできているから、まずは気軽にいろいろ重ねてみて大丈夫。</p>
+    ・「🎹コード」の段を使えば、これらの和音をマス目にワンタップで置けるよ。</p>
+    <p class="mdesc" style="text-align:center;font-weight:700;color:var(--wood-d);" id="freePlayStatus"></p>
+    <div class="btn-row" id="freePlayBtnWrap" style="display:none;margin-bottom:8px;">
+      <button class="mini-btn buy" id="freePlaySave">🎶 さっき弾いた並びを曲にする</button>
+      <button class="mini-btn" id="freePlayClear">記録をリセット</button>
+    </div>
     <div class="btn-row" style="margin-top:10px;"><button class="mini-btn buy" id="lectureBack">もどる</button></div>
   `, back);
   document.querySelectorAll('[data-chord]').forEach(btn=>{
     btn.onclick = ()=>{
-      const chord = CHORD_LECTURE[Number(btn.dataset.chord)];
-      chord.rows.forEach(r=>playTone(scaleNotes(chord.scale)[r].freq, 0.9, composerInstrument));
+      const ci = Number(btn.dataset.chord);
+      const chord = chords[ci];
+      chord.rows.forEach(r=>playTone(scaleNotes(composerScale)[r].freq, 0.9, composerInstrument));
+      if(composerScale==='forgotten'){
+        showFlavorToast('……昔、この曲を毎晩弾いていた奏者がいた、という言い伝えがある。何のためだったのかは、誰も知らない。');
+      }
+      freePlayLog.push({ci, t: performance.now()});
+      updateFreePlayUI();
     };
   });
+  document.getElementById('freePlaySave').onclick = ()=>{
+    const {gridA, gridB, usedB} = buildGridsFromChordLog(freePlayLog, composerScale);
+    composerEditingSong = null;
+    composerGrid = gridA;
+    composerDrumGrid = makeEmptyDrumGrid();
+    composerUseSections = usedB;
+    composerGridB = gridB;
+    composerDrumGridB = makeEmptyDrumGrid();
+    composerSection = 'A';
+    composerTitle = '即興の一曲';
+    freePlayLog = [];
+    renderComposerUI();
+    if(usedB) showFlavorToast('演奏が16マスに収まらなかったので、Bパターンに続けて記録したよ。');
+  };
+  document.getElementById('freePlayClear').onclick = ()=>{
+    freePlayLog = [];
+    updateFreePlayUI();
+  };
   document.getElementById('lectureBack').onclick = back;
+  updateFreePlayUI();
 }
 
 function renderSongListModal(){
@@ -3353,7 +3580,7 @@ function renderSongListModal(){
   const rows = [...G.songs].reverse().map(s=>{
     const isDayBGM = G.bgmDaySongId===s.id;
     const isNightBGM = G.bgmNightSongId===s.id;
-    const badge = (isDayBGM?' ☀️':'') + (isNightBGM?' 🌙':'');
+    const badge = (isDayBGM?' ☀️':'') + (isNightBGM?' 🌙':'') + (s.useSections?' 🎼展開':'');
     return `
     <div class="song-row">
       <div class="sr-left"><span class="sr-icon">🎼</span><div><div class="sr-name">${s.title}${badge}</div><div class="sr-price">${s.day}日目につくった曲・${(NOTE_SCALES[s.scale||'pentatonic']||NOTE_SCALES.pentatonic).shortLabel}</div></div></div>
@@ -3370,19 +3597,21 @@ function renderSongListModal(){
   openModal(`
     <h2>🎼 マイソング</h2>
     <p class="mdesc">今までにつくった曲の一覧。タップで聴きなおせる。昼BGM・夜BGMをそれぞれ設定でき、時間帯が変わると自動で切り替わるよ（森の奥では鳴らないよ）。</p>
-    ${rows || '<p class="mdesc">まだ曲がありません。</p>'}
-    <div class="btn-row" style="margin-top:10px;">
+    <div class="btn-row">
       <button class="mini-btn buy" id="songNew">＋ 新しい曲をつくる</button>
       <button class="mini-btn" id="lectureFromList">🎓 和音のコツ</button>
+      <button class="mini-btn" id="closeSongList">とじる</button>
     </div>
-    <div class="btn-row" style="margin-top:8px;"><button class="mini-btn" id="closeSongList">とじる</button></div>
+    <div style="margin-top:10px;">
+      ${rows || '<p class="mdesc">まだ曲がありません。</p>'}
+    </div>
   `);
   document.getElementById('songNew').onclick = ()=> renderComposer(null);
   document.getElementById('lectureFromList').onclick = ()=> renderChordLecture(renderSongListModal);
   document.querySelectorAll('[data-play]').forEach(btn=>{
     btn.onclick = ()=>{
       const song = G.songs.find(s=>s.id===btn.dataset.play);
-      if(song) startComposerPlayback(song.grid, song.tempo, song.instrument, song.scale, song.drumGrid);
+      if(song) startComposerPlayback(song.grid, song.tempo, song.instrument, song.scale, song.drumGrid, song.gridB, song.drumGridB, song.useSections);
     };
   });
   document.querySelectorAll('[data-edit]').forEach(btn=>{
@@ -3394,18 +3623,30 @@ function renderSongListModal(){
   document.querySelectorAll('[data-bgmday]').forEach(btn=>{
     btn.onclick = ()=>{
       const id = btn.dataset.bgmday;
-      G.bgmDaySongId = (G.bgmDaySongId===id) ? null : id;
+      const turningOn = G.bgmDaySongId !== id;
+      G.bgmDaySongId = turningOn ? id : null;
       saveGame();
       refreshBgmForCurrentPhase();
+      const song = G.songs.find(s=>s.id===id);
+      if(turningOn && song && song.scale==='forgotten' && G.villagers.length){
+        const v = randPick(G.villagers);
+        showFlavorToast(`${v.emoji} ${v.name}「……あの曲、あんまり人前では弾かない方がいいと思うよ」`);
+      }
       renderSongListModal();
     };
   });
   document.querySelectorAll('[data-bgmnight]').forEach(btn=>{
     btn.onclick = ()=>{
       const id = btn.dataset.bgmnight;
-      G.bgmNightSongId = (G.bgmNightSongId===id) ? null : id;
+      const turningOn = G.bgmNightSongId !== id;
+      G.bgmNightSongId = turningOn ? id : null;
       saveGame();
       refreshBgmForCurrentPhase();
+      const song = G.songs.find(s=>s.id===id);
+      if(turningOn && song && song.scale==='forgotten' && G.villagers.length){
+        const v = randPick(G.villagers);
+        showFlavorToast(`${v.emoji} ${v.name}「……あの曲、あんまり人前では弾かない方がいいと思うよ」`);
+      }
       renderSongListModal();
     };
   });
