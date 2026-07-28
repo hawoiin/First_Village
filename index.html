@@ -129,7 +129,7 @@
     display:none;white-space:nowrap;z-index:5;
   }
   .toast-bubble{
-    position:fixed;top:16px;left:50%;transform:translateX(-50%);
+    position:absolute;top:16px;left:50%;transform:translateX(-50%);
     background:#2b2038;color:#F2EFE7;white-space:normal;max-width:340px;width:88%;
     text-align:center;line-height:1.5;z-index:70;border-radius:14px;
   }
@@ -292,6 +292,7 @@
   .composer-label.drum-label{font-size:10px;}
   .composer-cell{width:21px;height:21px;border-radius:4px;background:#EFE6D0;border:1px solid #ddcf9f;cursor:pointer;flex-shrink:0;padding:0;}
   .composer-cell.active{background:var(--accent);border-color:var(--accent);}
+  .composer-cell.tie{background:#FFD9BE;border-color:#FFB98F;border-style:dashed;}
   .composer-cell.drum-cell.active{background:#5A6B8C;border-color:#5A6B8C;}
   .composer-cell.chord-cell.active{background:#B98CFF;border-color:#B98CFF;}
   .composer-cell.playhead{box-shadow:0 0 0 2px #4A90D9 inset;}
@@ -360,6 +361,11 @@ const SUNFLOWER_TILES = [[15,8],[16,8],[17,8],[15,9],[16,9],[17,9],[15,10],[16,1
 const CW = TILE*COLS, CH = TILE*ROWS;
 
 const AVATARS = ['😊','🐧','🌸','🍁','🌻','⛄','🎃','👻','🪆','🌝','🌚','🌛','🌞'];
+// 「顔だけ」を描いた絵文字は頭部の球に小さく貼る。
+// 「全身／モノ」を描いた絵文字(ペンギン・雪だるま・おばけ・こけし・花など)は
+// 彫刻ボディを付けず、絵文字そのものを立ち姿として単独表示する。
+const FACE_ONLY_EMOJI = new Set(['😊','🎃','🌝','🌚','🌛','🌞']);
+function isFaceOnlyEmoji(e){ return FACE_ONLY_EMOJI.has(e); }
 const PLAYER_COLORS = ['#FF7A5C','#FFB238','#3FBF6F','#3FA9E8','#B573F0','#FF5C9E'];
 
 const ITEMS = {
@@ -664,6 +670,31 @@ const VILLAGER_FLAVOR_LINES = {
   'マイペース':['締切の概念が、たまに消える。','昼寝から戻ってくると、なぜか完成していた。'],
   'きれい好き':['整理整頓だけは誰にも負けなかった。','細部のホコリ一つも見逃さなかった。'],
 };
+
+// 村の中で、プレイヤーが何もしなくても自然に起きる小さな日常イベント（ひとり）
+// 数値効果なし・見ているだけで楽しい演出専用のセリフバンク
+const SOLO_IDLE_LINES = {
+  'のんびり':  ['{name}が、ぼーっと空を見上げていた。','{name}が、大きなあくびをしていた。','{name}が、日向でのんびり座り込んでいた。','{name}が、風にふかれてじっとしていた。'],
+  'げんき':    ['{name}が、その場でぴょんぴょん跳ねていた。','{name}が、鼻歌まじりに足踏みしていた。','{name}が、元気よく伸びをしていた。','{name}が、なんでもない方向に手を振っていた。'],
+  'いたずら':  ['{name}が、こっそり何かを企んでいるような顔をしていた。','{name}が、誰もいない方に向かってニヤッと笑っていた。','{name}が、足元の小石を軽く蹴っていた。','{name}が、あたりをきょろきょろ見回していた。'],
+  'マイペース':['{name}が、ゆったりと同じ場所をぐるぐる歩いていた。','{name}が、何かを考えるように立ち止まっていた。','{name}が、マイペースに鼻歌を口ずさんでいた。','{name}が、ゆっくりまばたきをしていた。'],
+  'きれい好き':['{name}が、服についた葉っぱを丁寧に払っていた。','{name}が、足元の落ち葉をそっと整えていた。','{name}が、身だしなみを気にして手をなおしていた。','{name}が、あたりのゴミを見つけて拾っていた。'],
+};
+
+// 村の中で、村人ふたりがすれ違ったときに自然に起きる小さな会話イベント
+// こちらも数値効果なし・雰囲気演出専用
+const DUO_AMBIENT_LINES = [
+  '{a}と{b}が、立ち話をしていた。',
+  '{a}と{b}が、何やら盛り上がって笑い合っていた。',
+  '{a}が{b}に、何かを手渡していた。',
+  '{a}と{b}が、顔を見合わせてくすっと笑っていた。',
+  '{a}が{b}の話に、うんうんと相槌を打っていた。',
+  '{a}と{b}が、すれ違いざまに挨拶を交わしていた。',
+];
+const DUO_MISCHIEF_LINES = [
+  '{a}が{b}を、こっそり驚かせようとしていた。',
+  '{a}と{b}が、いたずらの相談でもしているようだった。',
+];
 
 const PRODUCTION_STYLES = [
   {id:'mainstream', name:'王道演出', emoji:'🎯', desc:'幅広い層に届く、まとまりの良い王道の見せ方。売上は伸びるが批評は手堅め。', salesMul:1.25, critMul:0.85},
@@ -1705,6 +1736,7 @@ function update(dt){
   updateDayNightCycle(dt);
   updatePlayer(dt);
   updateVillagers(dt);
+  updateVillageAmbientTimer(dt);
   updateBugs(dt);
   updateParticles(dt);
   updatePrompt();
@@ -1936,11 +1968,7 @@ function spawnVillagerSightingEvent(){
   const v = randPick(G.villagers);
   const startPos = tileCenterWorld(t.c, t.r);
   const endPos = tileCenterWorld(target.c, target.r);
-  const g = makeCharacterMesh(villagerBodyColor(v.id));
-  const face = makeEmojiSprite(v.emoji, 96);
-  face.position.set(0,0.5,0.05);
-  face.scale.set(.85,.85,.85);
-  g.add(face);
+  const g = buildVillagerMesh(v);
   const bubble = makeSpeechBubbleSprite(randPick(FOREST_VILLAGER_LINES));
   bubble.position.set(0, 1.15, 0);
   g.add(bubble);
@@ -2030,21 +2058,46 @@ function updatePlayer(dt){
     if(keys['ArrowLeft']||keys['KeyA']) dx-=1;
     if(keys['ArrowRight']||keys['KeyD']) dx+=1;
   }
-  if(dx===0&&dy===0) return;
-  const len = Math.hypot(dx,dy)||1;
-  dx/=len; dy/=len;
-  if(Math.abs(dx)>Math.abs(dy)) p.dir = dx>0?'right':'left';
-  else if(dy!==0) p.dir = dy>0?'down':'up';
+  const hasInput = dx!==0 || dy!==0;
+  let targetVX = 0, targetVY = 0;
+  if(hasInput){
+    const len = Math.hypot(dx,dy)||1;
+    dx/=len; dy/=len;
+    // カメラが向いている方向(camYawOffset)に合わせて入力方向を回転させる。
+    // これにより「奥」を押すとカメラが見ている奥へ、「右」を押すとカメラから見て右へ進むようになる。
+    const cy = Math.cos(camYawOffset), sy = Math.sin(camYawOffset);
+    const rdx = dx*cy + dy*sy;
+    const rdy = -dx*sy + dy*cy;
+    dx = rdx; dy = rdy;
+    if(Math.abs(dx)>Math.abs(dy)) p.dir = dx>0?'right':'left';
+    else if(dy!==0) p.dir = dy>0?'down':'up';
+    const running = keys['ShiftLeft'] || keys['ShiftRight'];
+    const speed = p.speed * (running ? 1.8 : 1) * mag;
+    targetVX = dx*speed;
+    targetVY = dy*speed;
+  }
 
-  const running = keys['ShiftLeft'] || keys['ShiftRight'];
-  const speed = p.speed * (running ? 1.8 : 1) * mag;
-  const nx = p.x + dx*speed*dt;
-  const ny = p.y + dy*speed*dt;
+  // 白い丘のくらしと同じ「目標速度へなめらかに近づける」動き方に。
+  // 止まる時も一瞬で止まらず、少し滑ってから止まる。
+  if(p.vx==null) p.vx = 0;
+  if(p.vy==null) p.vy = 0;
+  const accelT = 1 - Math.pow(0.0008, dt);
+  p.vx += (targetVX - p.vx) * accelT;
+  p.vy += (targetVY - p.vy) * accelT;
+  if(!hasInput && Math.hypot(p.vx,p.vy) < 2){ p.vx = 0; p.vy = 0; }
+
+  const nx = p.x + p.vx*dt;
+  const ny = p.y + p.vy*dt;
   const r = 11;
-  if(!isSolidPx(nx, p.y, r)) p.x = nx;
-  if(!isSolidPx(p.x, ny, r)) p.y = ny;
+  if(!isSolidPx(nx, p.y, r)) p.x = nx; else p.vx = 0;
+  if(!isSolidPx(p.x, ny, r)) p.y = ny; else p.vy = 0;
   p.x = Math.max(TILE*0.4, Math.min(CW-TILE*0.4, p.x));
   p.y = Math.max(TILE*0.4, Math.min(CH-TILE*0.4, p.y));
+
+  const speedNow = Math.hypot(p.vx, p.vy);
+  const maxSpeedRef = p.speed * 1.8;
+  const ratioNow = Math.min(1, speedNow/maxSpeedRef);
+  lastMoveSpeedRatio += (ratioNow - lastMoveSpeedRatio) * Math.min(1, dt*10);
 }
 
 function isSolidPx(x,y,r){
@@ -2088,6 +2141,48 @@ function updateVillagers(dt){
       if(d>2){ v.x += (dx/d)*20*dt; v.y += (dy/d)*20*dt; }
     }
   });
+}
+
+// 村の「ひとりでに生きてる感」：プレイヤーが何もしなくても、村人が勝手に
+// ちょっとした一人時間や立ち話をしている――という雰囲気だけの演出。数値効果は一切なし。
+function updateVillageAmbientTimer(dt){
+  if(G.scene!=='village' || G.phase==='night' || !G.villagers.length) return;
+  if(G.villageAmbientTimer==null) G.villageAmbientTimer = 5+Math.random()*4;
+  G.villageAmbientTimer -= dt;
+  if(G.villageAmbientTimer>0) return;
+  G.villageAmbientTimer = 7+Math.random()*6;
+
+  // 近くにいる村人ペアがいれば、少し優先的に「立ち話」イベントにする
+  let pair = null;
+  for(let i=0;i<G.villagers.length;i++){
+    for(let j=i+1;j<G.villagers.length;j++){
+      const a = G.villagers[i], b = G.villagers[j];
+      if(Math.hypot(a.x-b.x, a.y-b.y) < 46){ pair = [a,b]; break; }
+    }
+    if(pair) break;
+  }
+
+  if(pair && Math.random()<0.55){
+    const [a,b] = pair;
+    const mischief = (a.personality==='いたずら' || b.personality==='いたずら') && Math.random()<0.4;
+    const bank = mischief ? DUO_MISCHIEF_LINES : DUO_AMBIENT_LINES;
+    const line = randPick(bank).replace('{a}', a.name).replace('{b}', b.name);
+    // 束の間、二人ともその場に立ち止まって話し込む
+    a.tx = null; a.ty = null; a.moveTimer = 1.6+Math.random()*0.8;
+    b.tx = null; b.ty = null; b.moveTimer = 1.6+Math.random()*0.8;
+    const wpA = toWorld(a.x, a.y), wpB = toWorld(b.x, b.y);
+    addParticle3D('💬', (wpA.x+wpB.x)/2, (wpA.z+wpB.z)/2);
+    showFlavorToast(line);
+  } else {
+    const v = randPick(G.villagers);
+    const bank = SOLO_IDLE_LINES[v.personality];
+    if(!bank) return;
+    const line = randPick(bank).replace('{name}', v.name);
+    v.tx = null; v.ty = null; v.moveTimer = 1.2+Math.random()*0.8;
+    const wp = toWorld(v.x, v.y);
+    addParticle3D('💭', wp.x, wp.z);
+    showFlavorToast(line);
+  }
 }
 
 function updateBugs(dt){
@@ -3144,6 +3239,18 @@ function songStepData(song, globalStep){
   return {grid:song.gridB, drumGrid:song.drumGridB, localStep: globalStep - SONG_STEPS, section:'B'};
 }
 
+// 同じ段でマスが連続しているとき、音を伸ばして鳴らすためのヘルパー
+// セルの値: 0/false=オフ, 1/true=オン（新しい音）, 2=のばす（直前の音を継続、長押しで設定）
+function isNoteOnset(grid, row, step){
+  const v = grid[row][step];
+  return v===1 || v===true;
+}
+function noteRunLength(grid, row, step){
+  let len = 1;
+  while(step+len < SONG_STEPS && grid[row][step+len]===2) len++;
+  return len;
+}
+
 /* ---------- 曲のダウンロード（WAV書き出し） ---------- */
 function wavWriteString(view, offset, str){
   for(let i=0;i<str.length;i++) view.setUint8(offset+i, str.charCodeAt(i));
@@ -3189,7 +3296,10 @@ async function exportSongAsWav(song){
     const when = g*stepSec;
     const {grid, drumGrid, localStep} = songStepData(song, g);
     for(let row=0; row<notes.length; row++){
-      if(grid[row][localStep]) playTone(notes[row].freq, stepSec*0.9, song.instrument, 0.5, offlineCtx, when);
+      if(isNoteOnset(grid, row, localStep)){
+        const runLen = noteRunLength(grid, row, localStep);
+        playTone(notes[row].freq, stepSec*runLen*0.92, song.instrument, 0.5, offlineCtx, when);
+      }
     }
     if(drumGrid){
       for(let row=0; row<DRUM_KIT.length; row++){
@@ -3241,7 +3351,10 @@ function startComposerPlayback(grid, tempo, instrument, scaleId, drumGrid, gridB
     const sectionLabel = document.getElementById('composerSectionPlaying');
     if(sectionLabel) sectionLabel.textContent = songLike.useSections ? `▶ ${section}パターン再生中` : '';
     for(let row=0; row<notes.length; row++){
-      if(stepGrid[row][localStep]) playTone(notes[row].freq, stepSec*0.9, instrument);
+      if(isNoteOnset(stepGrid, row, localStep)){
+        const runLen = noteRunLength(stepGrid, row, localStep);
+        playTone(notes[row].freq, stepSec*runLen*0.92, instrument);
+      }
     }
     if(stepDrums){
       for(let row=0; row<DRUM_KIT.length; row++){
@@ -3267,7 +3380,10 @@ function startBGM(song){
   bgmTimer = setInterval(()=>{
     const {grid, drumGrid, localStep} = songStepData(song, bgmStep);
     for(let row=0; row<notes.length; row++){
-      if(grid[row][localStep]) playTone(notes[row].freq, stepSec*0.85, song.instrument, 0.11);
+      if(isNoteOnset(grid, row, localStep)){
+        const runLen = noteRunLength(grid, row, localStep);
+        playTone(notes[row].freq, stepSec*runLen*0.85, song.instrument, 0.11);
+      }
     }
     if(drumGrid){
       for(let row=0; row<DRUM_KIT.length; row++){
@@ -3295,17 +3411,51 @@ function refreshBgmForCurrentPhase(){
   else stopBGM();
 }
 
+function handleMelodyCellPress(cell, isLongPress){
+  const row = Number(cell.dataset.row), step = Number(cell.dataset.step);
+  const grid = activeMelodyGrid();
+  const cur = grid[row][step];
+  if(isLongPress){
+    const prev = step>0 ? grid[row][step-1] : null;
+    const prevActive = prev===1 || prev===true || prev===2;
+    if(!prevActive){
+      showFlavorToast('のばすには、直前のマスに音が必要だよ。');
+      return;
+    }
+    grid[row][step] = (cur===2) ? 0 : 2; // 既に「のばす」ならオフに、そうでなければのばす
+  } else {
+    if(cur===1 || cur===true || cur===2){
+      grid[row][step] = 0;
+      // 後ろに連なる「のばす」も一緒に消す
+      let s = step+1;
+      while(s<SONG_STEPS && grid[row][s]===2){ grid[row][s]=0; s++; }
+    } else {
+      grid[row][step] = 1;
+      playTone(scaleNotes(composerScale)[row].freq, 0.35, composerInstrument);
+    }
+  }
+  document.getElementById('composerGridWrap').innerHTML = composerGridHTML();
+  document.getElementById('composerChordWrap').innerHTML = composerChordGridHTML();
+}
+
 function activeMelodyGrid(){ return composerSection==='B' ? composerGridB : composerGrid; }
 function activeDrumGrid(){ return composerSection==='B' ? composerDrumGridB : composerDrumGrid; }
 
 function isChordActive(chordDef, step){
   const grid = activeMelodyGrid();
-  return chordDef.rows.every(r=>grid[r][step]);
+  return chordDef.rows.every(r=>isNoteOnset(grid, r, step));
 }
 function toggleChordAtStep(chordDef, step){
   const grid = activeMelodyGrid();
   const active = isChordActive(chordDef, step);
-  chordDef.rows.forEach(r=>{ grid[r][step] = !active; });
+  chordDef.rows.forEach(r=>{
+    grid[r][step] = active ? 0 : 1;
+    if(active){
+      // 解除したときは、その先に連なる「のばす」も一緒に消す（宙に浮いた延長マスを防ぐ）
+      let s = step+1;
+      while(s<SONG_STEPS && grid[r][s]===2){ grid[r][s]=0; s++; }
+    }
+  });
 }
 
 function composerGridHTML(){
@@ -3314,7 +3464,11 @@ function composerGridHTML(){
   return notes.map((note,row)=>`
     <div class="composer-row">
       <span class="composer-label">${note.name}</span>
-      ${Array.from({length:SONG_STEPS}, (_,step)=>`<button class="composer-cell${grid[row][step]?' active':''}" data-row="${row}" data-step="${step}"></button>`).join('')}
+      ${Array.from({length:SONG_STEPS}, (_,step)=>{
+        const v = grid[row][step];
+        const cls = (v===1||v===true) ? ' active' : v===2 ? ' tie' : '';
+        return `<button class="composer-cell${cls}" data-row="${row}" data-step="${step}"></button>`;
+      }).join('')}
     </div>
   `).join('');
 }
@@ -3366,7 +3520,7 @@ function renderComposerUI(){
   ` : '';
   openModal(`
     <h2>🎵 曲をつくる</h2>
-    <p class="mdesc">${composerScale==='forgotten' ? 'マス目をタップして音を置こう。……この音階、なぜか指が覚えているような気がする。' : 'マス目をタップして音を置こう。▶で再生できるよ。和音の組み方に迷ったら「和音のコツ」も見てみて。'}</p>
+    <p class="mdesc">${composerScale==='forgotten' ? 'マス目をタップして音を置こう。長押しで、直前の音を伸ばせるよ。……この音階、なぜか指が覚えているような気がする。' : 'マス目をタップして音を置こう。長押しすると、直前の音を伸ばせるよ。▶で再生できるよ。和音の組み方に迷ったら「和音のコツ」も見てみて。'}</p>
     <div class="start-field">
       <label>曲のタイトル</label>
       <input id="songTitle" placeholder="れい：村の朝" maxlength="12" value="${composerTitle.replace(/"/g,'&quot;')}">
@@ -3397,15 +3551,25 @@ function renderComposerUI(){
     </div>
   `, backToList);
 
-  document.getElementById('composerGridWrap').addEventListener('click', (e)=>{
+  let composerLongPressTimer = null;
+  let composerLongPressFired = false;
+  const melodyWrap = document.getElementById('composerGridWrap');
+  melodyWrap.addEventListener('pointerdown', (e)=>{
     const cell = e.target.closest('.composer-cell');
     if(!cell) return;
-    const row = Number(cell.dataset.row), step = Number(cell.dataset.step);
-    const grid = activeMelodyGrid();
-    grid[row][step] = !grid[row][step];
-    cell.classList.toggle('active');
-    if(grid[row][step]) playTone(scaleNotes(composerScale)[row].freq, 0.35, composerInstrument);
-    document.getElementById('composerChordWrap').innerHTML = composerChordGridHTML();
+    composerLongPressFired = false;
+    composerLongPressTimer = setTimeout(()=>{
+      composerLongPressFired = true;
+      handleMelodyCellPress(cell, true);
+    }, 420);
+  });
+  melodyWrap.addEventListener('pointerup', (e)=>{
+    const cell = e.target.closest('.composer-cell');
+    if(composerLongPressTimer){ clearTimeout(composerLongPressTimer); composerLongPressTimer = null; }
+    if(cell && !composerLongPressFired) handleMelodyCellPress(cell, false);
+  });
+  melodyWrap.addEventListener('pointercancel', ()=>{
+    if(composerLongPressTimer){ clearTimeout(composerLongPressTimer); composerLongPressTimer = null; }
   });
   document.getElementById('composerChordWrap').addEventListener('click', (e)=>{
     const cell = e.target.closest('.composer-cell');
@@ -3482,43 +3646,9 @@ function renderComposerUI(){
   document.getElementById('songBack').onclick = backToList;
 }
 
-let freePlayLog = [];
-function buildGridsFromChordLog(log, scaleId){
-  // 16マス（Aパターン）に収まらない分は、自動でBパターンに続ける（最大32マスまで）
-  const gridA = makeEmptyGrid(), gridB = makeEmptyGrid();
-  const chords = chordsForScale(scaleId);
-  if(!log.length) return {gridA, gridB, usedB:false};
-  const stepSec = 60/composerTempo/2;
-  let step = 0, usedB = false;
-  log.forEach((entry, idx)=>{
-    if(idx>0){
-      const gapSec = (entry.t - log[idx-1].t)/1000;
-      const gapSteps = Math.max(1, Math.round(gapSec/stepSec));
-      step += gapSteps;
-    }
-    if(step >= SONG_STEPS*2) return; // A+Bあわせて32マスまで
-    const chord = chords[entry.ci];
-    if(!chord) return;
-    if(step < SONG_STEPS){
-      chord.rows.forEach(r=>{ gridA[r][step] = true; });
-    } else {
-      usedB = true;
-      chord.rows.forEach(r=>{ gridB[r][step-SONG_STEPS] = true; });
-    }
-  });
-  return {gridA, gridB, usedB};
-}
-function updateFreePlayUI(){
-  const statusEl = document.getElementById('freePlayStatus');
-  const btnWrap = document.getElementById('freePlayBtnWrap');
-  if(statusEl) statusEl.textContent = freePlayLog.length ? `🎶 ここまで弾いた和音：${freePlayLog.length}個` : '';
-  if(btnWrap) btnWrap.style.display = freePlayLog.length>=4 ? 'flex' : 'none';
-}
-
 function renderChordLecture(backFn){
   stopComposerPlayback();
   stopBGM();
-  freePlayLog = [];
   const back = backFn || renderComposerUI;
   const chords = chordsForScale(composerScale);
   openModal(`
@@ -3533,28 +3663,163 @@ function renderChordLecture(backFn){
     <p class="mdesc" style="margin-top:10px;line-height:1.8;">💡 コツ<br>
     ・和音は曲の「始まり」と「終わり」に置くと落ち着いて聞こえるよ。<br>
     ・全部のマスを音で埋めず、あえて何も置かないマスを作るとリズムが生まれるよ。<br>
-    ・「🎹コード」の段を使えば、これらの和音をマス目にワンタップで置けるよ。</p>
-    <p class="mdesc" style="text-align:center;font-weight:700;color:var(--wood-d);" id="freePlayStatus"></p>
-    <div class="btn-row" id="freePlayBtnWrap" style="display:none;margin-bottom:8px;">
-      <button class="mini-btn buy" id="freePlaySave">🎶 さっき弾いた並びを曲にする</button>
-      <button class="mini-btn" id="freePlayClear">記録をリセット</button>
-    </div>
+    ・「🎹コード」の段を使えば、これらの和音をマス目にワンタップで置けるよ。<br>
+    ・自由に弾いてみたいときは「🎹演奏する」も試してみて。</p>
     <div class="btn-row" style="margin-top:10px;"><button class="mini-btn buy" id="lectureBack">もどる</button></div>
   `, back);
   document.querySelectorAll('[data-chord]').forEach(btn=>{
     btn.onclick = ()=>{
-      const ci = Number(btn.dataset.chord);
-      const chord = chords[ci];
-      chord.rows.forEach(r=>playTone(scaleNotes(composerScale)[r].freq, 0.9, composerInstrument));
+      const chord = chords[Number(btn.dataset.chord)];
+      chord.rows.forEach(r=>playTone(scaleNotes(composerScale)[r].freq, 0.6, composerInstrument));
       if(composerScale==='forgotten'){
         showFlavorToast('……昔、この曲を毎晩弾いていた奏者がいた、という言い伝えがある。何のためだったのかは、誰も知らない。');
       }
-      freePlayLog.push({ci, t: performance.now()});
-      updateFreePlayUI();
     };
   });
-  document.getElementById('freePlaySave').onclick = ()=>{
-    const {gridA, gridB, usedB} = buildGridsFromChordLog(freePlayLog, composerScale);
+  document.getElementById('lectureBack').onclick = back;
+}
+
+/* ---------- 演奏する（独立した自由演奏モード） ---------- */
+let performLog = [];
+let activeSustainedNodes = {};
+
+function startSustain(key, freqs, type){
+  stopSustain(key);
+  const ctx = getAudioCtx();
+  const nodes = freqs.map(freq=>{
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = type || 'sine';
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime+0.02);
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start();
+    return {osc, gain};
+  });
+  activeSustainedNodes[key] = nodes;
+}
+function stopSustain(key){
+  const nodes = activeSustainedNodes[key];
+  if(!nodes) return;
+  const ctx = getAudioCtx();
+  nodes.forEach(({osc,gain})=>{
+    try{
+      gain.gain.cancelScheduledValues(ctx.currentTime);
+      gain.gain.setValueAtTime(gain.gain.value, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime+0.08);
+      osc.stop(ctx.currentTime+0.1);
+    }catch(e){ /* already stopped */ }
+  });
+  delete activeSustainedNodes[key];
+}
+function stopAllSustain(){
+  Object.keys(activeSustainedNodes).forEach(stopSustain);
+}
+
+function buildGridsFromPerformLog(log, scaleId){
+  const gridA = makeEmptyGrid(), gridB = makeEmptyGrid();
+  const chords = chordsForScale(scaleId);
+  if(!log.length) return {gridA, gridB, usedB:false};
+  const stepSec = 60/composerTempo/2;
+  let step = 0, usedB = false;
+  log.forEach((entry, idx)=>{
+    if(idx>0){
+      const gapSec = (entry.t - log[idx-1].t)/1000;
+      const gapSteps = Math.max(1, Math.round(gapSec/stepSec));
+      step += gapSteps;
+    }
+    if(step >= SONG_STEPS*2) return; // A+Bあわせて32マスまで
+    const targetGrid = step<SONG_STEPS ? gridA : gridB;
+    const localStep = step<SONG_STEPS ? step : step-SONG_STEPS;
+    if(step>=SONG_STEPS) usedB = true;
+    if(entry.kind==='note') targetGrid[entry.idx][localStep] = true;
+    else{
+      const chord = chords[entry.idx];
+      if(chord) chord.rows.forEach(r=>{ targetGrid[r][localStep] = true; });
+    }
+  });
+  return {gridA, gridB, usedB};
+}
+
+function updatePerformUI(){
+  const statusEl = document.getElementById('performStatus');
+  const btnWrap = document.getElementById('performSaveWrap');
+  if(statusEl) statusEl.textContent = performLog.length ? `🎶 ここまで弾いた数：${performLog.length}` : '';
+  if(btnWrap) btnWrap.style.visibility = performLog.length>=4 ? 'visible' : 'hidden';
+}
+
+function renderPerformModal(backFn){
+  stopComposerPlayback();
+  stopBGM();
+  stopAllSustain();
+  performLog = [];
+  const back = backFn || renderWorkshopHome;
+  const notes = scaleNotes(composerScale);
+  const chords = chordsForScale(composerScale);
+  openModal(`
+    <h2>🎹 演奏する</h2>
+    <p class="mdesc">単音・和音を自由に鳴らして遊べるよ。ボタンを押している間、音が鳴り続けるよ。弾いた並びは記録されていて、あとで曲として保存できる。</p>
+    <div class="composer-controls">
+      <label>音階：<select id="performScale">${Object.entries(NOTE_SCALES).map(([id,s])=>`<option value="${id}" ${id===composerScale?'selected':''}>${s.label}</option>`).join('')}</select></label>
+      <label>音色：<select id="performInstrument">${SONG_INSTRUMENTS.map(ins=>`<option value="${ins.id}" ${ins.id===composerInstrument?'selected':''}>${ins.name}</option>`).join('')}</select></label>
+    </div>
+    <p class="mdesc" style="margin:10px 0 4px;">🎵 単音</p>
+    <div class="sg-grid" id="performNoteGrid" style="grid-template-columns:repeat(${notes.length},1fr);touch-action:none;">
+      ${notes.map((n,i)=>({n,i})).reverse().map(({n,i})=>`<button class="sg-btn" data-pnote="${i}" style="--sg-color:#8FBF7F;">${n.name}</button>`).join('')}
+    </div>
+    <p class="mdesc" style="margin:10px 0 4px;">🎹 和音</p>
+    <div class="sg-grid" id="performChordGrid" style="grid-template-columns:repeat(${chords.length},1fr);touch-action:none;">
+      ${chords.map((c,i)=>`<button class="sg-btn" data-pchord="${i}" style="--sg-color:#B98CFF;">${c.name.split('（')[0]}</button>`).join('')}
+    </div>
+    <p class="mdesc" id="performStatus" style="text-align:center;font-weight:700;color:var(--wood-d);min-height:18px;"></p>
+    <div class="btn-row" id="performSaveWrap" style="visibility:hidden;margin-top:8px;">
+      <button class="mini-btn buy" id="performSave">🎶 弾いた並びを曲にする</button>
+      <button class="mini-btn" id="performClear">記録をリセット</button>
+    </div>
+    <div class="btn-row" style="margin-top:12px;"><button class="mini-btn" id="performBack">もどる</button></div>
+  `, back);
+  document.querySelectorAll('[data-pnote]').forEach(btn=>{
+    const i = Number(btn.dataset.pnote);
+    const key = 'note'+i;
+    const start = (e)=>{
+      e.preventDefault();
+      btn.classList.add('lit');
+      startSustain(key, [scaleNotes(composerScale)[i].freq], composerInstrument);
+      performLog.push({kind:'note', idx:i, t: performance.now()});
+      updatePerformUI();
+    };
+    const end = ()=>{ btn.classList.remove('lit'); stopSustain(key); };
+    btn.addEventListener('pointerdown', start);
+    btn.addEventListener('pointerup', end);
+    btn.addEventListener('pointerleave', end);
+    btn.addEventListener('pointercancel', end);
+  });
+  document.querySelectorAll('[data-pchord]').forEach(btn=>{
+    const i = Number(btn.dataset.pchord);
+    const key = 'chord'+i;
+    const start = (e)=>{
+      e.preventDefault();
+      btn.classList.add('lit');
+      const chord = chordsForScale(composerScale)[i];
+      const freqs = chord.rows.map(r=>scaleNotes(composerScale)[r].freq);
+      startSustain(key, freqs, composerInstrument);
+      if(composerScale==='forgotten'){
+        showFlavorToast('……昔、この曲を毎晩弾いていた奏者がいた、という言い伝えがある。何のためだったのかは、誰も知らない。');
+      }
+      performLog.push({kind:'chord', idx:i, t: performance.now()});
+      updatePerformUI();
+    };
+    const end = ()=>{ btn.classList.remove('lit'); stopSustain(key); };
+    btn.addEventListener('pointerdown', start);
+    btn.addEventListener('pointerup', end);
+    btn.addEventListener('pointerleave', end);
+    btn.addEventListener('pointercancel', end);
+  });
+  document.getElementById('performScale').onchange = (e)=>{ stopAllSustain(); composerScale = e.target.value; renderPerformModal(back); };
+  document.getElementById('performInstrument').onchange = (e)=>{ composerInstrument = e.target.value; };
+  document.getElementById('performSave').onclick = ()=>{
+    const {gridA, gridB, usedB} = buildGridsFromPerformLog(performLog, composerScale);
     composerEditingSong = null;
     composerGrid = gridA;
     composerDrumGrid = makeEmptyDrumGrid();
@@ -3563,16 +3828,16 @@ function renderChordLecture(backFn){
     composerDrumGridB = makeEmptyDrumGrid();
     composerSection = 'A';
     composerTitle = '即興の一曲';
-    freePlayLog = [];
+    performLog = [];
     renderComposerUI();
     if(usedB) showFlavorToast('演奏が16マスに収まらなかったので、Bパターンに続けて記録したよ。');
   };
-  document.getElementById('freePlayClear').onclick = ()=>{
-    freePlayLog = [];
-    updateFreePlayUI();
+  document.getElementById('performClear').onclick = ()=>{
+    performLog = [];
+    updatePerformUI();
   };
-  document.getElementById('lectureBack').onclick = back;
-  updateFreePlayUI();
+  document.getElementById('performBack').onclick = ()=>{ stopAllSustain(); back(); };
+  updatePerformUI();
 }
 
 function renderSongListModal(){
@@ -3599,14 +3864,17 @@ function renderSongListModal(){
     <p class="mdesc">今までにつくった曲の一覧。タップで聴きなおせる。昼BGM・夜BGMをそれぞれ設定でき、時間帯が変わると自動で切り替わるよ（森の奥では鳴らないよ）。</p>
     <div class="btn-row">
       <button class="mini-btn buy" id="songNew">＋ 新しい曲をつくる</button>
+      <button class="mini-btn" id="goPerform">🎹演奏する</button>
       <button class="mini-btn" id="lectureFromList">🎓 和音のコツ</button>
       <button class="mini-btn" id="closeSongList">とじる</button>
     </div>
     <div style="margin-top:10px;">
       ${rows || '<p class="mdesc">まだ曲がありません。</p>'}
     </div>
+    <div class="btn-row" style="margin-top:8px;"><button class="mini-btn" id="closeSongList">とじる</button></div>
   `);
   document.getElementById('songNew').onclick = ()=> renderComposer(null);
+  document.getElementById('goPerform').onclick = ()=> renderPerformModal(renderSongListModal);
   document.getElementById('lectureFromList').onclick = ()=> renderChordLecture(renderSongListModal);
   document.querySelectorAll('[data-play]').forEach(btn=>{
     btn.onclick = ()=>{
@@ -4369,10 +4637,7 @@ function applyAvatarChange(avatar, color){
     const oldPos = playerMesh.position.clone();
     const oldRotY = playerMesh.rotation.y;
     scene3d.remove(playerMesh);
-    playerMesh = makeCharacterMesh(color);
-    const avatarFace = makeEmojiSprite(avatar, 96);
-    avatarFace.position.set(0,0.5,0.05); avatarFace.scale.set(.85,.85,.85);
-    playerMesh.add(avatarFace);
+    playerMesh = buildPlayerMesh(color, avatar);
     playerMesh.position.copy(oldPos);
     playerMesh.rotation.y = oldRotY;
     scene3d.add(playerMesh);
@@ -4428,17 +4693,40 @@ let playerMesh, villagerMeshes = [], buildingMeshes = [];
 let bugMeshes = [], sparkleMeshes = [], furnitureMeshes = [];
 let forestTreeMeshes = [], forestSparkleMeshes = [];
 let particleSprites = [];
+let dustPuffs = [];
+let playerDustTimer = 0;
+let playerFacingY = 0; // 彫刻ボディのプレイヤーが向いているワールド角度(ラジアン)
 let paleEncounters = [];
 let forestVillagerSightings = [];
 let forestWildlifeSightings = [];
 let floorTileMeshes = [];
 const RENDER_W = 640, RENDER_H = 420;
 
+// --- 白い丘式オービットカメラ：ドラッグでyaw/pitchを操作、速度でFOVが揺れる ---
+let camYawOffset = 0;      // ユーザーがドラッグで加えた水平回転(rad)
+let camPitchOffset = 0;    // ユーザーがドラッグで加えた仰角オフセット(rad)
+let camDragging = false, camDragMoved = false;
+let camLastPX = 0, camLastPY = 0, camDownPX = 0, camDownPY = 0;
+let lastMoveSpeedRatio = 0; // 0=停止 1=ダッシュ中（走行時の画角の揺れに使う）
+const CAM_PITCH_MIN = -0.5, CAM_PITCH_MAX = 0.45;
+
 function toWorld(px, py){
   return { x: px/TILE - COLS/2, z: py/TILE - ROWS/2 };
 }
 function tileCenterWorld(c, r){
   return { x: c + 0.5 - COLS/2, z: r + 0.5 - ROWS/2 };
+}
+
+// 見た目だけの緩やかな起伏（当たり判定やタイルグリッドには一切影響しない）。
+// 白い丘のくらしの「丘」の雰囲気を出すため、村と森の地面だけになだらかな高低差をつける。
+function terrainHeight(x, z){
+  return Math.sin(x*0.42)*0.16 + Math.cos(z*0.34)*0.16 + Math.sin((x+z)*0.26)*0.09;
+}
+
+// 地面タイルの箱には厚みがあるため、見た目の表面はterrainHeight()より0.09高い。
+// 地面に「立つ」オブジェクト(木・建物・村人・プレイヤー等)はこちらを使う。
+function groundStandY(x, z){
+  return terrainHeight(x, z) + 0.09;
 }
 
 function makeEmojiSprite(text, size, flip){
@@ -4458,6 +4746,93 @@ function makeEmojiSprite(text, size, flip){
   const spr = new THREE.Sprite(mat);
   spr.scale.set(0.55,0.55,0.55);
   return spr;
+}
+
+// 絵文字を「常にカメラを向く板(Sprite)」ではなく、頭部に固定される板ポリとして描く。
+// 体が傾いたり向きを変えたりすると顔も一緒について来る(＝真後ろからは見えなくなる)。
+function makeEmojiFacePlane(text, size, planeWidth, planeHeight){
+  size = size || 96;
+  const {cv} = drawEmojiCropped(text, size);
+  const tex = new THREE.CanvasTexture(cv);
+  const w = planeWidth || 0.3;
+  const h = planeHeight || w;
+  const geo = new THREE.PlaneGeometry(w, h);
+  const mat = new THREE.MeshBasicMaterial({map:tex, transparent:true, side:THREE.DoubleSide, depthWrite:false});
+  const mesh = new THREE.Mesh(geo, mat);
+  return mesh;
+}
+
+// 絵文字を「べったり」貼り付けた見た目にするバージョン。
+// curveRadiusを頭よりずっと大きくとることで、サイズ(targetWidth)を保ったまま
+// ごく緩やかな湾曲だけを付けられる(=頭のサイズに引っ張られてテクスチャが縮まない)。
+// 絵文字を描画したあと、実際にインクが乗っているピクセルの外接矩形だけを切り出す。
+// 正方形に収めようとすると、縦横比が偏った絵文字(🪆のような縦長など)は
+// 余白だらけになって小さく見えてしまうため、キャンバス自体を絵の縦横比に合わせて作る。
+function drawEmojiCropped(text, size){
+  size = size || 96;
+  const work = size*2;
+  const wc = document.createElement('canvas');
+  wc.width = work; wc.height = work;
+  const wctx = wc.getContext('2d');
+  wctx.font = (work*0.8)+'px sans-serif';
+  wctx.textAlign = 'center'; wctx.textBaseline = 'middle';
+  wctx.fillText(text, work/2, work/2+2);
+
+  const data = wctx.getImageData(0,0,work,work).data;
+  let minX=work, minY=work, maxX=0, maxY=0, found=false;
+  for(let y=0;y<work;y++){
+    for(let x=0;x<work;x++){
+      const a = data[(y*work+x)*4+3];
+      if(a>10){
+        found = true;
+        if(x<minX) minX=x; if(x>maxX) maxX=x;
+        if(y<minY) minY=y; if(y>maxY) maxY=y;
+      }
+    }
+  }
+  if(!found){
+    const cv = document.createElement('canvas');
+    cv.width = size; cv.height = size;
+    const ctx = cv.getContext('2d');
+    ctx.font = (size*0.72)+'px sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(text, size/2, size/2+2);
+    return {cv, aspect:1};
+  }
+  const bw = maxX-minX, bh = maxY-minY;
+  const aspect = bw/bh; // 幅/高さ
+  let cw, ch;
+  if(aspect>=1){ cw = size; ch = Math.round(size/aspect); }
+  else { ch = size; cw = Math.round(size*aspect); }
+  const pad = Math.max(cw,ch)*0.07;
+  cw += pad*2; ch += pad*2;
+  const cv = document.createElement('canvas');
+  cv.width = cw; cv.height = ch;
+  const ctx = cv.getContext('2d');
+  ctx.drawImage(wc, minX, minY, bw, bh, pad, pad, cw-pad*2, ch-pad*2);
+  return {cv, aspect: cw/ch};
+}
+
+function makeEmojiHeadDecal(text, size, targetWidth, targetHeight, curveRadius){
+  size = size || 96;
+  const {cv} = drawEmojiCropped(text, size); // 縦横比はクロップの密着(余白除去)だけに使う
+  const tex = new THREE.CanvasTexture(cv);
+  const r = curveRadius || 0.5;
+  // 幅・高さを直接指定する(絵文字の縦横比には従わせない＝多少引き伸ばされる代わりに、
+  // 指定した通りのサイズになることを優先する)
+  const targetW = targetWidth || 0.38;
+  const targetH = targetHeight || targetW;
+  const capAngleW = targetW / r;
+  const capAngleH = targetH / r;
+  const geo = new THREE.SphereGeometry(
+    r, 20, 16,
+    Math.PI/2 - capAngleW/2, capAngleW,  // phi(横方向)
+    Math.PI/2 - capAngleH/2, capAngleH   // theta(縦方向)
+  );
+  geo.translate(0, 0, -r); // パッチの正面をローカル原点(0,0,0)に合わせる
+  const mat = new THREE.MeshBasicMaterial({map:tex, transparent:true, side:THREE.DoubleSide, depthWrite:false});
+  const mesh = new THREE.Mesh(geo, mat);
+  return mesh;
 }
 
 function makeSpeechBubbleSprite(text){
@@ -4555,20 +4930,592 @@ function makePaleFigureMesh(){
   return g;
 }
 
+// 白い丘のくらしと同じ「メッシュの内側に一回り大きい黒フチメッシュを重ねる」手法。
+// これだけで紙細工／トイのような彫刻的な輪郭になる。
+function addOutline(mesh, factor){
+  const outline = new THREE.Mesh(mesh.geometry,
+    new THREE.MeshBasicMaterial({color:0x2b2621, side:THREE.BackSide}));
+  outline.scale.setScalar(factor || 1.08);
+  mesh.add(outline);
+  return outline;
+}
+
 function makeCharacterMesh(color){
   const g = new THREE.Group();
-  const body = new THREE.Mesh(new THREE.SphereGeometry(0.22,12,8),
-    new THREE.MeshStandardMaterial({color, roughness:.6}));
-  body.scale.set(1,0.5,1);
-  body.position.y = 0.11;
+
+  // 胴体：ぺたんこの球ではなく、白い丘の村人と同じ円錐シルエットに
+  const body = new THREE.Mesh(new THREE.ConeGeometry(0.155, 0.36, 9),
+    new THREE.MeshStandardMaterial({color, roughness:.75, flatShading:true}));
+  body.position.y = 0.18;
   body.castShadow = true;
+  addOutline(body, 1.09);
   g.add(body);
+
+  // 頭：クリーム色の小さな球。手前に絵文字の顔スプライトを重ねて表情を出す
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.135, 12, 8),
+    new THREE.MeshStandardMaterial({color:0xFAF3E1, roughness:.7, flatShading:true}));
+  head.position.y = 0.44;
+  head.castShadow = true;
+  addOutline(head, 1.1);
+  g.add(head);
+
   const shadowMesh = new THREE.Mesh(new THREE.CircleGeometry(0.26,16),
     new THREE.MeshBasicMaterial({color:0x000000, transparent:true, opacity:.18}));
   shadowMesh.rotation.x = -Math.PI/2;
   shadowMesh.position.y = 0.01;
   shadowMesh.userData.isShadow = true;
   g.add(shadowMesh);
+
+  g.userData.headRef = head;
+  g.userData.bodyRef = body;
+  return g;
+}
+
+// 全身／モノを描いた絵文字用：彫刻ボディを付けず、絵文字そのものを
+// 立ち姿として単独表示する(二重身体になるのを避ける)。
+// ぺんた(🐧)用：卵型の胴体＋小さい頭。ディテールは前面の絵文字デカールに任せる
+function makePenguinBodyMesh(color){
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 10),
+    new THREE.MeshStandardMaterial({color, roughness:.7, flatShading:true}));
+  body.scale.set(0.92, 1.32, 0.92);
+  body.position.y = 0.21;
+  body.castShadow = true;
+  addOutline(body, 1.08);
+  g.add(body);
+
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.115, 12, 8),
+    new THREE.MeshStandardMaterial({color, roughness:.7, flatShading:true}));
+  head.position.y = 0.45;
+  head.castShadow = true;
+  addOutline(head, 1.1);
+  g.add(head);
+
+  // 翼(フリッパー)：平たく潰した球を体の左右に、少し後ろへ傾けて配置
+  const wingMat = new THREE.MeshStandardMaterial({color, roughness:.75, flatShading:true});
+  [-1, 1].forEach(side=>{
+    const wing = new THREE.Mesh(new THREE.SphereGeometry(0.095, 8, 6), wingMat);
+    wing.scale.set(0.32, 0.95, 0.55);
+    wing.position.set(side*0.15, 0.20, -0.02);
+    wing.rotation.z = side * 0.4;
+    wing.rotation.y = side * 0.25;
+    wing.castShadow = true;
+    addOutline(wing, 1.1);
+    g.add(wing);
+  });
+
+  // お腹の白い部分：平たく潰した白い楕円を体の前面に重ねる
+  const belly = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 8),
+    new THREE.MeshStandardMaterial({color:'#F7F4EA', roughness:.75, flatShading:true}));
+  belly.scale.set(0.72, 0.92, 0.22);
+  belly.position.set(0, 0.185, 0.125);
+  g.add(belly);
+
+  // くちばし：小さい円錐を頭の正面に
+  const beak = new THREE.Mesh(new THREE.ConeGeometry(0.032, 0.075, 8),
+    new THREE.MeshStandardMaterial({color:'#F2A65A', roughness:.6, flatShading:true}));
+  beak.rotation.x = Math.PI/2;
+  beak.position.set(0, 0.435, 0.135);
+  addOutline(beak, 1.1);
+  g.add(beak);
+
+  // 目：小さい黒い球2つ
+  const eyeMat = new THREE.MeshBasicMaterial({color:0x2b2621});
+  [-1, 1].forEach(side=>{
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.016, 6, 6), eyeMat);
+    eye.position.set(side*0.045, 0.47, 0.105);
+    g.add(eye);
+  });
+
+  // 足：平たいオレンジの楕円を裾から覗かせる(歩行アニメーション用に参照を保持)
+  const footMat = new THREE.MeshStandardMaterial({color:'#F2A65A', roughness:.7, flatShading:true});
+  const feet = [];
+  [-1, 1].forEach(side=>{
+    const foot = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 6), footMat);
+    foot.scale.set(1, 0.32, 1.5);
+    foot.position.set(side*0.065, 0.015, 0.09);
+    foot.userData.baseY = 0.015;
+    foot.userData.baseZ = 0.09;
+    g.add(foot);
+    feet.push(foot);
+  });
+
+  const shadowMesh = new THREE.Mesh(new THREE.CircleGeometry(0.26,16),
+    new THREE.MeshBasicMaterial({color:0x000000, transparent:true, opacity:.18}));
+  shadowMesh.rotation.x = -Math.PI/2;
+  shadowMesh.position.y = 0.01;
+  shadowMesh.userData.isShadow = true;
+  g.add(shadowMesh);
+
+  g.userData.headRef = head;
+  g.userData.bodyRef = body;
+  g.userData.feet = feet;
+  return g;
+}
+
+// カサネ(🪆)用：上下で太さの違う円柱(こけし型)＋小さい頭
+function makeKokeshiBodyMesh(color){
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.105, 0.155, 0.40, 12),
+    new THREE.MeshStandardMaterial({color, roughness:.75, flatShading:true}));
+  body.position.y = 0.20;
+  body.castShadow = true;
+  addOutline(body, 1.07);
+  g.add(body);
+
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.125, 12, 8),
+    new THREE.MeshStandardMaterial({color:'#F2E1C8', roughness:.75, flatShading:true}));
+  head.position.y = 0.44;
+  head.castShadow = true;
+  addOutline(head, 1.09);
+  g.add(head);
+
+  // 襟(スカーフ)：首元に色付きの輪を巻く
+  const collar = new THREE.Mesh(new THREE.TorusGeometry(0.115, 0.022, 8, 16),
+    new THREE.MeshStandardMaterial({color:'#E14F5B', roughness:.7, flatShading:true}));
+  collar.rotation.x = Math.PI/2;
+  collar.position.y = 0.375;
+  collar.castShadow = true;
+  addOutline(collar, 1.08);
+  g.add(collar);
+
+  // 目：小さい黒い球2つ
+  const eyeMat = new THREE.MeshBasicMaterial({color:0x2b2621});
+  [-1, 1].forEach(side=>{
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.014, 6, 6), eyeMat);
+    eye.position.set(side*0.045, 0.465, 0.115);
+    g.add(eye);
+  });
+
+  // 頬の赤み：薄いピンクの平たい円
+  const cheekMat = new THREE.MeshBasicMaterial({color:'#F2A0A8', transparent:true, opacity:.75});
+  [-1, 1].forEach(side=>{
+    const cheek = new THREE.Mesh(new THREE.CircleGeometry(0.024, 10), cheekMat);
+    cheek.position.set(side*0.075, 0.435, 0.10);
+    cheek.rotation.y = side * -0.5;
+    g.add(cheek);
+  });
+
+  // 口：小さく潰した赤いパーツ
+  const mouth = new THREE.Mesh(new THREE.CircleGeometry(0.012, 8),
+    new THREE.MeshBasicMaterial({color:'#B23A45'}));
+  mouth.scale.set(1.4, 0.6, 1);
+  mouth.position.set(0, 0.415, 0.122);
+  g.add(mouth);
+
+  const shadowMesh = new THREE.Mesh(new THREE.CircleGeometry(0.26,16),
+    new THREE.MeshBasicMaterial({color:0x000000, transparent:true, opacity:.18}));
+  shadowMesh.rotation.x = -Math.PI/2;
+  shadowMesh.position.y = 0.01;
+  shadowMesh.userData.isShadow = true;
+  g.add(shadowMesh);
+
+  g.userData.headRef = head;
+  g.userData.bodyRef = body;
+  return g;
+}
+
+// 村人1人分のメッシュ一式を作る共通処理(通常表示・森のすれ違い演出の両方から使う)
+function buildVillagerMesh(v){
+  let g;
+  if(v.id==='pyon'){
+    g = makeSunVillagerMesh(villagerBodyColor(v.id));
+  } else if(v.id==='moko'){
+    g = makeMoonVillagerMesh(villagerBodyColor(v.id));
+  } else if(v.id==='konta'){
+    g = makeNewMoonVillagerMeshV2(villagerBodyColor(v.id));
+  } else if(isFaceOnlyEmoji(v.emoji)){
+    g = makeCharacterMesh(villagerBodyColor(v.id));
+    const face = makeEmojiHeadDecal(v.emoji, 96, 0.38, 0.38, 0.5);
+    face.position.set(0,0.44,0.14);
+    g.add(face);
+  } else if(v.id==='penta'){
+    g = makePenguinBodyMesh(villagerBodyColor(v.id));
+  } else if(v.id==='ponzu'){
+    g = makeKokeshiBodyMesh(villagerBodyColor(v.id));
+  } else {
+    g = makeIconCharacterMesh(v.emoji);
+  }
+  return g;
+}
+
+// ヒヨリ(🌞)用：太陽をモチーフに、頭の周りに放射状のトゲ(光冠)を配置。絵文字は使わない
+function makeSunVillagerMesh(color){
+  const g = makeCharacterMesh(color);
+  const head = g.userData.headRef;
+  head.material.color.set('#FF9F40'); // 頭部も太陽らしいオレンジに
+  const headY = head.position.y; // 0.44
+  const headR = 0.135;
+
+  // 太陽の光条：平たい星型の板を頭の後ろに配置し、正面から見て絵文字のような放射状に見せる(角は丸める)
+  const spikes = 8, outerR = 0.24, innerR = 0.125;
+  const step = Math.PI / spikes;
+  const pts = [];
+  for(let i=0;i<spikes*2;i++){
+    const rr = (i%2===0) ? outerR : innerR;
+    const a = i*step - Math.PI/2;
+    pts.push(new THREE.Vector2(Math.cos(a)*rr, Math.sin(a)*rr));
+  }
+  const n = pts.length;
+  const round = 0.28; // 角を丸める強さ(0〜0.5)
+  const lerp = (a,b,t)=> new THREE.Vector2(a.x+(b.x-a.x)*t, a.y+(b.y-a.y)*t);
+  const shape = new THREE.Shape();
+  for(let i=0;i<n;i++){
+    const prev = pts[(i-1+n)%n], cur = pts[i], next = pts[(i+1)%n];
+    const a = lerp(prev, cur, 1-round);
+    const b = lerp(cur, next, round);
+    if(i===0) shape.moveTo(a.x, a.y); else shape.lineTo(a.x, a.y);
+    shape.quadraticCurveTo(cur.x, cur.y, b.x, b.y);
+  }
+  shape.closePath();
+  const sunGeo = new THREE.ExtrudeGeometry(shape, {depth:0.025, bevelEnabled:false});
+  const sunMesh = new THREE.Mesh(sunGeo,
+    new THREE.MeshStandardMaterial({color:'#FFA23C', roughness:.6, flatShading:true}));
+  sunMesh.position.set(0, headY, -0.0125); // 頭と中心を揃える(同心円状に重ねる)
+  sunMesh.castShadow = true;
+  addOutline(sunMesh, 1.05);
+  g.add(sunMesh);
+
+  // 目：三日月型の笑顔目(上に凸のカーブ、細めではなくはっきりした弧に)
+  const ew = 0.03;
+  const eyeShape = new THREE.Shape();
+  eyeShape.moveTo(-ew, 0);
+  eyeShape.quadraticCurveTo(0, ew*2.1, ew, 0);
+  eyeShape.quadraticCurveTo(0, ew*1.1, -ew, 0);
+  const eyeGeo = new THREE.ExtrudeGeometry(eyeShape, {depth:0.016, bevelEnabled:false});
+  const eyeMat = new THREE.MeshBasicMaterial({color:0x000000});
+  [-1, 1].forEach(side=>{
+    const eye = new THREE.Mesh(eyeGeo, eyeMat);
+    eye.rotation.x = -0.55; // 口と同じく、見下ろすカメラの方へ面を向ける
+    eye.position.set(side*0.05, headY + 0.035, headR*0.9);
+    g.add(eye);
+  });
+
+  // 眉毛：黒い細い弧を目の上に(はっきり見えるよう厚みを増す)
+  const bw = 0.026;
+  const browShape = new THREE.Shape();
+  browShape.moveTo(-bw, 0);
+  browShape.quadraticCurveTo(0, bw*0.55, bw, 0);
+  browShape.quadraticCurveTo(0, bw*0.3, -bw, 0);
+  const browGeo = new THREE.ExtrudeGeometry(browShape, {depth:0.015, bevelEnabled:false});
+  const browMat = new THREE.MeshBasicMaterial({color:0x000000});
+  [-1, 1].forEach(side=>{
+    const brow = new THREE.Mesh(browGeo, browMat);
+    brow.rotation.x = -0.55;
+    brow.rotation.z = -side * 0.35; // 内側を上げ、外側を下げる
+    brow.position.set(side*0.075, headY + 0.09, headR*0.86);
+    g.add(brow);
+  });
+
+  // 口：大きく幅広い三日月型にし、見下ろしカメラに向けて上向きに傾ける
+  const mw = 0.06;
+  const smileShape = new THREE.Shape();
+  smileShape.moveTo(-mw, 0);
+  smileShape.quadraticCurveTo(0, -mw*1.15, mw, 0);
+  smileShape.quadraticCurveTo(0, -mw*0.45, -mw, 0);
+  const mouth = new THREE.Mesh(
+    new THREE.ExtrudeGeometry(smileShape, {depth:0.016, bevelEnabled:false}),
+    new THREE.MeshBasicMaterial({color:0x000000}));
+  mouth.rotation.x = -0.55; // 見下ろすカメラの方へ面を向ける
+  mouth.position.set(0, headY + 0.005, headR*0.88);
+  g.add(mouth);
+
+  return g;
+}
+
+// ツキ(🌝)用：ヒヨリと同じ目・眉毛・口のパーツをそのまま流用し、光条は付けず頭の色だけ月らしく変える
+// ウラ(🌚)用：半目(眠たげ/知ってる感じ)＋ニヤッとした非対称の口。新月らしい紫色に
+// ウラの顔をCanvasに直接描いて、頭の丸みに沿ったテクスチャとして貼る版。
+// パーツを空間に積み重ねる旧版(makeNewMoonVillagerMesh)より、浮きやZファイティングが起きない。
+function drawUraFaceCanvas(size){
+  size = size || 128;
+  const cv = document.createElement('canvas');
+  cv.width = size; cv.height = size;
+  const ctx = cv.getContext('2d');
+  const cx = size/2, cy = size/2;
+
+  [-1, 1].forEach(side=>{
+    const ex = cx + side*size*0.25, ey = cy - size*0.13;
+    const r = size*0.20;
+    // 半円の目(上が平ら・下が丸い形そのもので表現。まぶたのパーツは重ねない)
+    ctx.fillStyle = '#ffffff';
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = size*0.012;
+    ctx.beginPath();
+    ctx.arc(ex, ey, r, 0, Math.PI, false); // 下半分の弧
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    // 瞳(右上寄りに置いて、視線が右上を見ているように)
+    ctx.fillStyle = '#000000';
+    ctx.beginPath();
+    ctx.arc(ex + r*0.62, ey + r*0.05, r*0.44, 0, Math.PI, false);
+    ctx.closePath();
+    ctx.fill();
+    // 眉(アーチ型の形はそのまま、全体を傾けて垂れ眉に)
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = size*0.04;
+    ctx.lineCap = 'round';
+    ctx.save();
+    ctx.translate(ex, ey - r*1.55);
+    ctx.rotate(side * 0.35); // 内側が上がり外側が下がるよう傾ける
+    ctx.beginPath();
+    ctx.moveTo(-r*0.9, 0);
+    ctx.quadraticCurveTo(0, -r*0.9, r*0.9, 0);
+    ctx.stroke();
+    ctx.restore();
+    ctx.stroke();
+  });
+
+  // 口(非対称のニヤッと)
+  ctx.strokeStyle = '#000000';
+  ctx.lineWidth = size*0.03;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(cx - size*0.15, cy + size*0.10);
+  ctx.quadraticCurveTo(cx + size*0.03, cy + size*0.23, cx + size*0.17, cy + size*0.08);
+  ctx.stroke();
+
+  return cv;
+}
+
+function makeNewMoonVillagerMeshV2(color){
+  const g = makeCharacterMesh(color);
+  const head = g.userData.headRef;
+  head.material.color.set('#6E4A9E'); // 新月らしい紫
+  const headScale = 1.15; // ツキと同じ大きさに揃える
+  head.scale.setScalar(headScale);
+  const headY = head.position.y; // 0.44
+  const headR = 0.135 * headScale;
+
+  const faceCanvas = drawUraFaceCanvas(128);
+  const tex = new THREE.CanvasTexture(faceCanvas);
+  const capAngle = THREE.MathUtils.degToRad(108); // 顔がカバーする範囲(頭の前面)
+  const r = headR * 1.01;
+  const faceGeo = new THREE.SphereGeometry(
+    r, 20, 16,
+    Math.PI/2 - capAngle/2, capAngle,
+    Math.PI/2 - capAngle/2, capAngle
+  );
+  const faceMesh = new THREE.Mesh(faceGeo,
+    new THREE.MeshBasicMaterial({map:tex, transparent:true, side:THREE.DoubleSide, depthWrite:false}));
+  faceMesh.position.set(0, headY, 0);
+  g.add(faceMesh);
+
+  // クレーター：紫の中に少し明るい紫の斑点(旧版と同じ)
+  const craterMat = new THREE.MeshBasicMaterial({color:'#7A5AA8', transparent:true, opacity:.5});
+  const craterDefs = [
+    {theta: 1.3,  phi: 1.4,  r:0.020},
+    {theta: -1.4, phi: 1.6,  r:0.017},
+    {theta: 0.6,  phi: 0.55, r:0.015},
+    {theta: -2.5, phi: 1.8,  r:0.018},
+  ];
+  craterDefs.forEach(cd=>{
+    const dir = new THREE.Vector3(
+      Math.sin(cd.phi)*Math.sin(cd.theta),
+      Math.cos(cd.phi),
+      Math.sin(cd.phi)*Math.cos(cd.theta)
+    ).normalize();
+    const crater = new THREE.Mesh(new THREE.CircleGeometry(cd.r, 10), craterMat);
+    crater.position.set(dir.x*headR*0.98, headY + dir.y*headR*0.98, dir.z*headR*0.98);
+    crater.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1), dir);
+    g.add(crater);
+  });
+
+  return g;
+}
+
+function makeNewMoonVillagerMesh(color){
+  const g = makeCharacterMesh(color);
+  const head = g.userData.headRef;
+  head.material.color.set('#5B3A82'); // 新月らしい紫
+  const headY = head.position.y; // 0.44
+  const headR = 0.135;
+
+  // 目：白目＋瞳＋上から覆う瞼(半分閉じた「眠たげ」な目)
+  [-1, 1].forEach(side=>{
+    const ex = side*0.05, ey = headY + 0.02, ez = headR*0.9;
+    const eyeWhite = new THREE.Mesh(new THREE.CircleGeometry(0.026, 12),
+      new THREE.MeshBasicMaterial({color:0xffffff}));
+    eyeWhite.rotation.x = -0.55;
+    eyeWhite.position.set(ex, ey, ez);
+    g.add(eyeWhite);
+
+    const pupil = new THREE.Mesh(new THREE.CircleGeometry(0.011, 10),
+      new THREE.MeshBasicMaterial({color:0x000000}));
+    pupil.rotation.x = -0.55;
+    pupil.position.set(ex, ey - 0.008, ez + 0.01);
+    g.add(pupil);
+
+    // 瞼：白目の上半分〜3分の2を覆う半円
+    const lidShape = new THREE.Shape();
+    lidShape.moveTo(-0.028, 0);
+    lidShape.absarc(0, 0, 0.028, Math.PI, 0, true);
+    lidShape.lineTo(0.028, 0);
+    lidShape.closePath();
+    const lid = new THREE.Mesh(
+      new THREE.ExtrudeGeometry(lidShape, {depth:0.01, bevelEnabled:false}),
+      new THREE.MeshBasicMaterial({color:0x000000}));
+    lid.rotation.x = -0.55;
+    lid.position.set(ex, ey + 0.006, ez + 0.02);
+    g.add(lid);
+  });
+
+  // 眉毛：短く平たいアーチ、目の上に離して配置
+  const bw = 0.022;
+  const browShape = new THREE.Shape();
+  browShape.moveTo(-bw, 0);
+  browShape.quadraticCurveTo(0, bw*0.4, bw, 0);
+  browShape.quadraticCurveTo(0, bw*0.15, -bw, 0);
+  const browGeo = new THREE.ExtrudeGeometry(browShape, {depth:0.012, bevelEnabled:false});
+  const browMat = new THREE.MeshBasicMaterial({color:0x000000});
+  [-1, 1].forEach(side=>{
+    const brow = new THREE.Mesh(browGeo, browMat);
+    brow.rotation.x = -0.55;
+    brow.position.set(side*0.05, headY + 0.075, headR*0.88);
+    g.add(brow);
+  });
+
+  // 口：ニヤッとした非対称の笑み
+  const mw = 0.045;
+  const smileShape = new THREE.Shape();
+  smileShape.moveTo(-mw, 0.01);
+  smileShape.quadraticCurveTo(mw*0.3, -mw*0.9, mw, 0.02);
+  smileShape.quadraticCurveTo(mw*0.3, -mw*0.35, -mw, 0.01);
+  const mouth = new THREE.Mesh(
+    new THREE.ExtrudeGeometry(smileShape, {depth:0.014, bevelEnabled:false}),
+    new THREE.MeshBasicMaterial({color:0x000000}));
+  mouth.rotation.x = -0.55;
+  mouth.position.set(0, headY - 0.03, headR*0.88);
+  g.add(mouth);
+
+  // クレーター：紫の中に少し明るい紫の斑点
+  const craterMat = new THREE.MeshBasicMaterial({color:'#7A5AA8', transparent:true, opacity:.5});
+  const craterDefs = [
+    {theta: 1.3,  phi: 1.4,  r:0.020},
+    {theta: -1.4, phi: 1.6,  r:0.017},
+    {theta: 0.6,  phi: 0.55, r:0.015},
+    {theta: -2.5, phi: 1.8,  r:0.018},
+  ];
+  craterDefs.forEach(cd=>{
+    const dir = new THREE.Vector3(
+      Math.sin(cd.phi)*Math.sin(cd.theta),
+      Math.cos(cd.phi),
+      Math.sin(cd.phi)*Math.cos(cd.theta)
+    ).normalize();
+    const crater = new THREE.Mesh(new THREE.CircleGeometry(cd.r, 10), craterMat);
+    crater.position.set(dir.x*headR*0.98, headY + dir.y*headR*0.98, dir.z*headR*0.98);
+    crater.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1), dir);
+    g.add(crater);
+  });
+
+  return g;
+}
+
+function makeMoonVillagerMesh(color){
+  const g = makeCharacterMesh(color);
+  const head = g.userData.headRef;
+  head.material.color.set('#DE9E5C'); // 頭部を月らしいオレンジ寄りの色に
+  const headScale = 1.15;
+  head.scale.setScalar(headScale); // ヒヨリより頭部を大きめに
+  const headY = head.position.y; // 0.44
+  const headR = 0.135 * headScale;
+
+  // 目：三日月型の笑顔目(ヒヨリと同じ形)
+  const ew = 0.03;
+  const eyeShape = new THREE.Shape();
+  eyeShape.moveTo(-ew, 0);
+  eyeShape.quadraticCurveTo(0, ew*2.1, ew, 0);
+  eyeShape.quadraticCurveTo(0, ew*1.1, -ew, 0);
+  const eyeGeo = new THREE.ExtrudeGeometry(eyeShape, {depth:0.016, bevelEnabled:false});
+  const eyeMat = new THREE.MeshBasicMaterial({color:0x000000});
+  [-1, 1].forEach(side=>{
+    const eye = new THREE.Mesh(eyeGeo, eyeMat);
+    eye.rotation.x = -0.55;
+    eye.position.set(side*0.05, headY + 0.035, headR*0.9);
+    g.add(eye);
+  });
+
+  // 眉毛：ヒヨリと同じ形
+  const bw = 0.026;
+  const browShape = new THREE.Shape();
+  browShape.moveTo(-bw, 0);
+  browShape.quadraticCurveTo(0, bw*0.55, bw, 0);
+  browShape.quadraticCurveTo(0, bw*0.3, -bw, 0);
+  const browGeo = new THREE.ExtrudeGeometry(browShape, {depth:0.015, bevelEnabled:false});
+  const browMat = new THREE.MeshBasicMaterial({color:0x000000});
+  [-1, 1].forEach(side=>{
+    const brow = new THREE.Mesh(browGeo, browMat);
+    brow.rotation.x = -0.55;
+    brow.rotation.z = -side * 0.6;
+    brow.position.set(side*0.075, headY + 0.09, headR*0.86);
+    g.add(brow);
+  });
+
+  // 口：ヒヨリと同じ形
+  const mw = 0.06;
+  const smileShape = new THREE.Shape();
+  smileShape.moveTo(-mw, 0);
+  smileShape.quadraticCurveTo(0, -mw*1.15, mw, 0);
+  smileShape.quadraticCurveTo(0, -mw*0.45, -mw, 0);
+  const mouth = new THREE.Mesh(
+    new THREE.ExtrudeGeometry(smileShape, {depth:0.016, bevelEnabled:false}),
+    new THREE.MeshBasicMaterial({color:0x000000}));
+  mouth.rotation.x = -0.55;
+  mouth.position.set(0, headY + 0.005, headR*0.88);
+  g.add(mouth);
+
+  // クレーター：顔のパーツを避けて頭の側面・上部に散らす
+  const craterMat = new THREE.MeshBasicMaterial({color:'#7A4A20', transparent:true, opacity:.55});
+  const craterDefs = [
+    {theta: 1.3,  phi: 1.4,  r:0.020},
+    {theta: -1.4, phi: 1.6,  r:0.017},
+    {theta: 0.6,  phi: 0.55, r:0.015},
+    {theta: -2.5, phi: 1.8,  r:0.018},
+    {theta: 2.2,  phi: 0.9,  r:0.013},
+  ];
+  craterDefs.forEach(cd=>{
+    const dir = new THREE.Vector3(
+      Math.sin(cd.phi)*Math.sin(cd.theta),
+      Math.cos(cd.phi),
+      Math.sin(cd.phi)*Math.cos(cd.theta)
+    ).normalize();
+    const crater = new THREE.Mesh(new THREE.CircleGeometry(cd.r, 10), craterMat);
+    crater.position.set(dir.x*headR*0.98, headY + dir.y*headR*0.98, dir.z*headR*0.98);
+    crater.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1), dir);
+    g.add(crater);
+  });
+
+  return g;
+}
+
+function makeIconCharacterMesh(emoji){
+  const g = new THREE.Group();
+  const spr = makeEmojiSprite(emoji, 96);
+  spr.scale.set(.62, .62, .62);
+  spr.position.set(0, 0.31, 0);
+  g.add(spr);
+  const shadowMesh = new THREE.Mesh(new THREE.CircleGeometry(0.26,16),
+    new THREE.MeshBasicMaterial({color:0x000000, transparent:true, opacity:.18}));
+  shadowMesh.rotation.x = -Math.PI/2;
+  shadowMesh.position.y = 0.01;
+  shadowMesh.userData.isShadow = true;
+  g.add(shadowMesh);
+  g.userData.iconSprite = spr;
+  return g;
+}
+
+// プレイヤーのメッシュ一式を作る共通処理(初期化時・アバター変更時の両方から使う)
+function buildPlayerMesh(color, avatar){
+  let g;
+  if(isFaceOnlyEmoji(avatar)){
+    g = makeCharacterMesh(color);
+    const face = makeEmojiHeadDecal(avatar, 96, 0.38, 0.38, 0.5);
+    face.position.set(0,0.44,0.14);
+    g.add(face);
+  } else {
+    g = makeIconCharacterMesh(avatar);
+  }
   return g;
 }
 
@@ -4597,7 +5544,12 @@ function applyPhaseLighting(){
     dirLight.color.setHex(night ? 0x9FB4FF : 0xFFF6E0);
     dirLight.intensity = night ? 0.22 : 0.85;
   }
-  if(scene3d) scene3d.background = new THREE.Color(night ? 0x232A45 : 0xffffff);
+  if(scene3d){
+    const bgColor = night ? 0x232A45 : 0xffffff;
+    scene3d.background = new THREE.Color(bgColor);
+    if(!scene3d.fog) scene3d.fog = new THREE.Fog(bgColor, 9, 26);
+    else scene3d.fog.color.setHex(bgColor);
+  }
   if(playerLampLight) playerLampLight.intensity = night ? 0.9 : 0;
 }
 
@@ -4613,6 +5565,7 @@ function initThreeScene(){
   renderer3d.shadowMap.type = THREE.PCFSoftShadowMap;
   container.innerHTML = '';
   container.appendChild(renderer3d.domElement);
+  wireCameraDrag();
 
   cameraVillage = new THREE.PerspectiveCamera(CAMERA_BASE.village.fov, RENDER_W/RENDER_H, 0.1, 100);
   cameraHouse = new THREE.PerspectiveCamera(CAMERA_BASE.house.fov, RENDER_W/RENDER_H, 0.1, 100);
@@ -4639,11 +5592,11 @@ function initThreeScene(){
 
   const plinth = new THREE.Mesh(new THREE.CylinderGeometry(11.5,11.8,0.7,40),
     new THREE.MeshStandardMaterial({color:0xD9B98A, roughness:.9}));
-  plinth.position.y = -0.7; plinth.receiveShadow = true;
+  plinth.position.y = -1.27; plinth.receiveShadow = false;
   scene3d.add(plinth);
   const mound = new THREE.Mesh(new THREE.CylinderGeometry(10.6,10.9,0.5,40),
     new THREE.MeshStandardMaterial({color:0x9fd68a, roughness:.95}));
-  mound.position.y = -0.28; mound.receiveShadow = true;
+  mound.position.y = -0.85; mound.receiveShadow = false; // 表面は-0.6。起伏の最低点(理論値約-0.5)より確実に下
   scene3d.add(mound);
 
   villageGroup = new THREE.Group();
@@ -4657,10 +5610,7 @@ function initThreeScene(){
   buildHouseGroup();
   buildForestGroup();
 
-  playerMesh = makeCharacterMesh(G.playerColor||'#FF7A5C');
-  const avatarFace = makeEmojiSprite(G.avatar, 96);
-  avatarFace.position.set(0,0.5,0.05); avatarFace.scale.set(.85,.85,.85);
-  playerMesh.add(avatarFace);
+  playerMesh = buildPlayerMesh(G.playerColor||'#FF7A5C', G.avatar);
   scene3d.add(playerMesh);
 
   wireRaycastClick();
@@ -4678,13 +5628,14 @@ function buildVillageGroup(){
       const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.98,h,0.98),
         new THREE.MeshStandardMaterial({color: tileColor3D(t), roughness:.9}));
       const pos = tileCenterWorld(c,r);
-      mesh.position.set(pos.x, t===2? -0.05 : h/2 - 0.09, pos.z);
+      const th = t===2 ? 0 : terrainHeight(pos.x, pos.z); // 水面は平らに保つ
+      mesh.position.set(pos.x, th + (t===2? -0.05 : h/2 - 0.09), pos.z);
       mesh.receiveShadow = true;
       villageGroup.add(mesh);
       if(t===4){
         const isSunflower = SUNFLOWER_TILES.some(([sc,sr])=>sc===c && sr===r);
         const flower = makeEmojiSprite(isSunflower ? '🌻' : '🌼', isSunflower ? 60 : 48);
-        flower.position.set(pos.x, isSunflower ? 0.38 : 0.28, pos.z);
+        flower.position.set(pos.x, groundStandY(pos.x, pos.z) + (isSunflower ? 0.38 : 0.28), pos.z);
         const s = isSunflower ? 0.5 : 0.4;
         flower.scale.set(s, s, s);
         villageGroup.add(flower);
@@ -4704,7 +5655,7 @@ function buildVillageGroup(){
     canopy.position.y = 0.5; canopy.castShadow = true;
     canopy.scale.setScalar(0.85+Math.random()*0.3);
     g.add(canopy);
-    g.position.set(pos.x, 0, pos.z);
+    g.position.set(pos.x, groundStandY(pos.x, pos.z), pos.z);
     g.rotation.y = Math.random()*Math.PI*2;
     villageGroup.add(g);
   });
@@ -4725,17 +5676,13 @@ function buildVillageGroup(){
     const icon = makeEmojiSprite(b.icon, 64);
     icon.position.set(0, 0.95, 0.42);
     g.add(icon);
-    g.position.set(pos.x, 0, pos.z);
+    g.position.set(pos.x, groundStandY(pos.x, pos.z), pos.z);
     villageGroup.add(g);
     buildingMeshes.push(g);
   });
 
   villagerMeshes = G.villagers.map(v=>{
-    const g = makeCharacterMesh(villagerBodyColor(v.id));
-    const face = makeEmojiSprite(v.emoji, 96);
-    face.position.set(0,0.5,0.05);
-    face.scale.set(.85,.85,.85);
-    g.add(face);
+    const g = buildVillagerMesh(v);
     villageGroup.add(g);
     return g;
   });
@@ -4756,7 +5703,7 @@ function buildVillageGroup(){
   const icon = makeEmojiSprite('🕯️', 56);
   icon.position.set(0, 0.75, 0.3); icon.scale.set(.42,.42,.42);
   gate.add(icon);
-  gate.position.set(gatePos.x, 0, gatePos.z);
+  gate.position.set(gatePos.x, groundStandY(gatePos.x, gatePos.z), gatePos.z);
   villageGroup.add(gate);
 
   rebuildBugMeshes();
@@ -4779,7 +5726,8 @@ function buildForestGroup(){
       const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.98,h,0.98),
         new THREE.MeshStandardMaterial({color: t===1?pathColor:floorColor, roughness:.95}));
       const pos = tileCenterWorld(c,r);
-      mesh.position.set(pos.x, h/2-0.09, pos.z);
+      const th = terrainHeight(pos.x, pos.z);
+      mesh.position.set(pos.x, th + h/2-0.09, pos.z);
       mesh.receiveShadow = true;
       forestGroup.add(mesh);
     }
@@ -4828,7 +5776,7 @@ function buildForestGroup(){
       glow.position.y = 0.5*scaleMul+0.3; glow.scale.set(.3,.3,.3);
       g.add(glow);
     }
-    g.position.set(pos.x, 0, pos.z);
+    g.position.set(pos.x, groundStandY(pos.x, pos.z), pos.z);
     g.rotation.y = Math.random()*Math.PI*2;
     forestGroup.add(g);
     return g;
@@ -4847,7 +5795,7 @@ function buildForestGroup(){
     const glowIcon = makeEmojiSprite(sh.done?'🕯️':'✨', 48);
     glowIcon.position.y = 0.42; glowIcon.scale.set(.36,.36,.36);
     g.add(glowIcon);
-    g.position.set(pos.x, 0, pos.z);
+    g.position.set(pos.x, groundStandY(pos.x, pos.z), pos.z);
     forestGroup.add(g);
   }
 
@@ -4855,7 +5803,7 @@ function buildForestGroup(){
     const spr = makeEmojiSprite('✨', 56);
     spr.scale.set(.42,.42,.42);
     const pos = tileCenterWorld(sp.c, sp.r);
-    spr.position.set(pos.x, 0.35, pos.z);
+    spr.position.set(pos.x, groundStandY(pos.x, pos.z) + 0.35, pos.z);
     forestGroup.add(spr);
     return spr;
   });
@@ -4876,7 +5824,7 @@ function rebuildSparkleMeshes(){
     const spr = makeEmojiSprite('✨', 56);
     spr.scale.set(.42,.42,.42);
     const pos = tileCenterWorld(sp.c, sp.r);
-    spr.position.set(pos.x, 0.35, pos.z);
+    spr.position.set(pos.x, groundStandY(pos.x, pos.z) + 0.35, pos.z);
     villageGroup.add(spr);
     return spr;
   });
@@ -4988,13 +5936,70 @@ function addParticle3D(text, worldX, worldZ){
   particleSprites.push({spr, life:1.1});
 }
 
+// 白い丘のくらしと同じ「走ると足元から砂埃が舞う」演出。
+// 見た目だけの軽い円盤で、当たり判定などには一切関与しない。
+function spawnDustPuff(worldX, groundY, worldZ){
+  if(!scene3d) return;
+  const mesh = new THREE.Mesh(new THREE.CircleGeometry(0.07,10),
+    new THREE.MeshBasicMaterial({color:0xF3EEE2, transparent:true, opacity:.35}));
+  mesh.rotation.x = -Math.PI/2;
+  mesh.position.set(worldX + (Math.random()-0.5)*0.08, groundY+0.02, worldZ + (Math.random()-0.5)*0.08);
+  scene3d.add(mesh);
+  dustPuffs.push({mesh, life:0.5, maxLife:0.5});
+}
+
 function syncThree(){
   if(!renderer3d) return;
 
   if(playerMesh){
-    const wp = toWorld(G.player.x, G.player.y);
-    playerMesh.position.set(wp.x, 0, wp.z);
-    if(playerLampLight) playerLampLight.position.set(wp.x, 0.6, wp.z);
+    const p = G.player;
+    const wp = toWorld(p.x, p.y);
+    const th = G.scene==='house' ? 0.09 : groundStandY(wp.x, wp.z);
+    const speedNow = Math.hypot(p.vx||0, p.vy||0);
+    const speedRatio = lastMoveSpeedRatio;
+    const isSculpted = !!playerMesh.userData.bodyRef;
+
+    // 進行方向へ体を向け、走るほど前のめりに（彫刻ボディのキャラのみ。絵文字アイコン型は常にカメラ正面なので回転させない）
+    if(isSculpted){
+      if(speedNow > 4){
+        const targetFacing = Math.atan2(p.vx, p.vy);
+        let diff = targetFacing - playerFacingY;
+        while(diff > Math.PI) diff -= Math.PI*2;
+        while(diff < -Math.PI) diff += Math.PI*2;
+        playerFacingY += diff * Math.min(1, 0.22);
+        playerMesh.rotation.y = playerFacingY;
+      }
+      const leanTarget = speedRatio * 0.18;
+      playerMesh.rotation.x += (leanTarget - playerMesh.rotation.x) * 0.15;
+    }
+
+    // 足取りに合わせた上下バウンドと、着地の潰れ伸び
+    const bobSpeed = 6 + speedRatio*7;
+    const bobPhase = Math.sin(performance.now()/1000*bobSpeed);
+    const bobAmt = speedRatio>0.04 ? (0.014 + speedRatio*0.02) : 0;
+    const bobOffset = bobPhase*bobAmt;
+    playerMesh.position.set(wp.x, th + bobOffset, wp.z);
+    const squash = 1 - bobPhase*speedRatio*0.025;
+    playerMesh.scale.set(1/Math.sqrt(squash), squash, 1/Math.sqrt(squash));
+
+    const shadowMesh = playerMesh.children.find(c=>c.userData && c.userData.isShadow);
+    if(shadowMesh){
+      shadowMesh.material.opacity = 0.18 - Math.abs(bobOffset)*0.5;
+      const sh = 1 - Math.min(0.3, Math.abs(bobOffset)*1.2);
+      shadowMesh.scale.set(sh, sh, sh);
+    }
+
+    if(playerLampLight) playerLampLight.position.set(wp.x, th+0.6, wp.z);
+
+    // 走行中は足元に砂埃
+    if(speedRatio > 0.2 && G.scene!=='house'){
+      playerDustTimer += 1/60;
+      const interval = 0.16 - speedRatio*0.08;
+      if(playerDustTimer > interval){
+        playerDustTimer = 0;
+        spawnDustPuff(wp.x, th, wp.z);
+      }
+    }
   }
   G.villagers.forEach((v,i)=>{
     const mesh = villagerMeshes[i];
@@ -5002,24 +6007,62 @@ function syncThree(){
     mesh.visible = G.phase!=='night';
     if(G.phase==='night') return;
     const wp = toWorld(v.x, v.y);
-    mesh.position.set(wp.x, 0, wp.z);
+    const groundY = groundStandY(wp.x, wp.z);
+    let moving = false;
+    if(mesh.userData.bodyRef && v.tx!=null){
+      const dx = v.tx - v.x, dy = v.ty - v.y;
+      const d = Math.hypot(dx, dy);
+      if(d>4){
+        moving = true;
+        const targetFacing = Math.atan2(dx, dy);
+        let diff = targetFacing - (mesh.userData.facing||0);
+        while(diff > Math.PI) diff -= Math.PI*2;
+        while(diff < -Math.PI) diff += Math.PI*2;
+        mesh.userData.facing = (mesh.userData.facing||0) + diff*0.15;
+        mesh.rotation.y = mesh.userData.facing;
+      }
+    }
+    // 歩いている間だけ上下バウンド＋左右の揺れ(よちよち歩き)を付ける。低コストな使い回し。
+    if(moving){
+      const t = performance.now()/1000 * 7 + i*10; // 村人ごとに位相をずらす
+      const wobble = Math.sin(t);
+      mesh.position.set(wp.x, groundY + Math.abs(wobble)*0.02, wp.z);
+      mesh.rotation.z = wobble * 0.14;
+      if(mesh.userData.feet){
+        mesh.userData.feet.forEach((foot, fi)=>{
+          const phase = t + fi*Math.PI; // 左右で位相を反対にして交互に動かす
+          const lift = Math.max(0, Math.sin(phase))*0.025;
+          foot.position.y = foot.userData.baseY + lift;
+          foot.position.z = foot.userData.baseZ + Math.sin(phase)*0.02;
+        });
+      }
+    } else {
+      mesh.position.set(wp.x, groundY, wp.z);
+      mesh.rotation.z += (0 - mesh.rotation.z) * 0.15;
+      if(mesh.userData.feet){
+        mesh.userData.feet.forEach(foot=>{
+          foot.position.y += (foot.userData.baseY - foot.position.y) * 0.2;
+          foot.position.z += (foot.userData.baseZ - foot.position.z) * 0.2;
+        });
+      }
+    }
   });
   if(bugMeshes.length !== G.bugs.length) rebuildBugMeshes();
   G.bugs.forEach((bug,i)=>{
     const spr = bugMeshes[i];
     if(!spr) return;
     const wp = toWorld(bug.x, bug.y);
-    spr.position.set(wp.x, 0.32 + Math.sin(performance.now()/300+i)*0.05, wp.z);
+    spr.position.set(wp.x, groundStandY(wp.x, wp.z) + 0.32 + Math.sin(performance.now()/300+i)*0.05, wp.z);
   });
   if(sparkleMeshes.length !== G.sparkles.length) rebuildSparkleMeshes();
   sparkleMeshes.forEach((spr,i)=>{
-    spr.position.y = 0.32 + Math.sin(performance.now()/260+i)*0.06;
+    spr.position.y = groundStandY(spr.position.x, spr.position.z) + 0.32 + Math.sin(performance.now()/260+i)*0.06;
   });
   if(G.scene==='forest' && G.forest && forestSparkleMeshes.length !== G.forest.sparkles.length){
     buildForestGroup();
   }
   forestSparkleMeshes.forEach((spr,i)=>{
-    spr.position.y = 0.35 + Math.sin(performance.now()/260+i)*0.06;
+    spr.position.y = groundStandY(spr.position.x, spr.position.z) + 0.35 + Math.sin(performance.now()/260+i)*0.06;
   });
   if(G.scene==='house' && furnitureMeshes.length !== G.houseFurniture.length) rebuildFurnitureMeshes();
 
@@ -5028,6 +6071,15 @@ function syncThree(){
     p.spr.position.y += 0.012;
     p.spr.material.opacity = Math.max(0, p.life);
     if(p.life<=0){ scene3d.remove(p.spr); return false; }
+    return true;
+  });
+  dustPuffs = dustPuffs.filter(d=>{
+    d.life -= 1/60;
+    const t = 1 - Math.max(0, d.life)/d.maxLife;
+    const s = 1 + t*1.8;
+    d.mesh.scale.set(s,s,s);
+    d.mesh.material.opacity = Math.max(0, 0.35*(1-t));
+    if(d.life<=0){ scene3d.remove(d.mesh); return false; }
     return true;
   });
   updatePaleEncounters(1/60);
@@ -5043,13 +6095,59 @@ function updateCameraFollow(){
   if(!activeCamera) return;
   const wp = toWorld(G.player.x, G.player.y);
   const key = G.scene==='house' ? 'house' : G.scene==='forest' ? 'forest' : 'village';
+  const groundY = key==='house' ? 0.09 : groundStandY(wp.x, wp.z);
   const offset = cameraOffsetFor(key);
-  const targetX = wp.x, targetY = offset.y, targetZ = wp.z + offset.z;
+
+  // 基準となる仰角・距離を「高さ／奥行きオフセット」から算出し、
+  // そこにドラッグ操作分(camPitchOffset)を足して球面座標で追従させる。
+  // -> 白い丘のくらしと同じ「プレイヤーを中心に回り込む」カメラになる。
+  const dist = Math.hypot(offset.y, offset.z);
+  const basePitch = Math.atan2(offset.y, offset.z);
+  const pitch = Math.max(CAM_PITCH_MIN, Math.min(CAM_PITCH_MAX, camPitchOffset)) + basePitch;
+  const horizDist = dist * Math.cos(pitch);
+  const height = dist * Math.sin(pitch);
+
+  const targetX = wp.x + Math.sin(camYawOffset) * horizDist;
+  const targetZ = wp.z + Math.cos(camYawOffset) * horizDist;
+  const targetY = height + groundY;
+
   const cp = activeCamera.position;
-  cp.x += (targetX - cp.x)*0.08;
-  cp.y += (targetY - cp.y)*0.08;
-  cp.z += (targetZ - cp.z)*0.08;
-  activeCamera.lookAt(wp.x, 0.3, wp.z);
+  const camT = camDragging ? 1 : 0.09;
+  cp.x += (targetX - cp.x)*camT;
+  cp.y += (targetY - cp.y)*camT;
+  cp.z += (targetZ - cp.z)*camT;
+  activeCamera.lookAt(wp.x, groundY + 0.3, wp.z);
+
+  // 走っているときほど画角が少し広がり、疾走感を出す（白い丘と同じ演出）
+  const targetFov = offset.fov + lastMoveSpeedRatio * 5;
+  if(Math.abs(activeCamera.fov - targetFov) > 0.05){
+    activeCamera.fov += (targetFov - activeCamera.fov) * 0.12;
+    activeCamera.updateProjectionMatrix();
+  }
+}
+
+function wireCameraDrag(){
+  const el = renderer3d && renderer3d.domElement;
+  if(!el) return;
+  el.style.touchAction = 'none';
+  el.addEventListener('pointerdown', (e)=>{
+    camDragging = true; camDragMoved = false;
+    camLastPX = e.clientX; camLastPY = e.clientY;
+    camDownPX = e.clientX; camDownPY = e.clientY;
+  });
+  el.addEventListener('pointermove', (e)=>{
+    if(!camDragging) return;
+    const dx = e.clientX - camLastPX;
+    const dy = e.clientY - camLastPY;
+    if(Math.abs(e.clientX-camDownPX) > 5 || Math.abs(e.clientY-camDownPY) > 5) camDragMoved = true;
+    camYawOffset -= dx * 0.007;
+    camPitchOffset = Math.max(CAM_PITCH_MIN, Math.min(CAM_PITCH_MAX, camPitchOffset + dy*0.004));
+    camLastPX = e.clientX; camLastPY = e.clientY;
+  });
+  const endDrag = ()=>{ camDragging = false; };
+  el.addEventListener('pointerup', endDrag);
+  el.addEventListener('pointercancel', endDrag);
+  el.addEventListener('pointerleave', endDrag);
 }
 
 function draw(){
