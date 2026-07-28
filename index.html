@@ -1862,7 +1862,7 @@ function spawnWildlifeEvent(){
   const spr = makeEmojiSprite(animal.emoji, 72, flip);
   spr.scale.set(.62,.62,.62);
   g.add(spr);
-  g.position.set(startPos.x, 0.28, startPos.z);
+  g.position.set(startPos.x, groundStandY(startPos.x, startPos.z) + 0.28, startPos.z);
   setGroupOpacity(g, 0);
   forestGroup.add(g);
   forestWildlifeSightings.push({
@@ -1886,7 +1886,7 @@ function updateForestWildlifeSightings(dt){
     s.mesh.position.x = s.startX + (s.endX-s.startX)*walkT;
     s.mesh.position.z = s.startZ + (s.endZ-s.startZ)*walkT;
     const hop = Math.abs(Math.sin((elapsed+s.hopSeed)*4));
-    s.mesh.position.y = s.baseY + hop*0.15;
+    s.mesh.position.y = groundStandY(s.mesh.position.x, s.mesh.position.z) + s.baseY + hop*0.15;
     const squash = 1 - hop*0.15;
     s.sprite.scale.set(.62*(1+hop*0.12), .62*squash, 1);
     if(s.life<=0){ forestGroup && forestGroup.remove(s.mesh); return false; }
@@ -1902,7 +1902,7 @@ function spawnFigureEncounter(){
   const startPos = tileCenterWorld(t.c, t.r);
   const endPos = tileCenterWorld(target.c, target.r);
   const mesh = makePaleFigureMesh();
-  mesh.position.set(startPos.x, 0, startPos.z);
+  mesh.position.set(startPos.x, groundStandY(startPos.x, startPos.z), startPos.z);
   setGroupOpacity(mesh, 0);
   forestGroup.add(mesh);
   paleEncounters.push({
@@ -1972,7 +1972,7 @@ function spawnVillagerSightingEvent(){
   const bubble = makeSpeechBubbleSprite(randPick(FOREST_VILLAGER_LINES));
   bubble.position.set(0, 1.15, 0);
   g.add(bubble);
-  g.position.set(startPos.x, 0, startPos.z);
+  g.position.set(startPos.x, groundStandY(startPos.x, startPos.z), startPos.z);
   setGroupOpacity(g, 0);
   forestGroup.add(g);
   forestVillagerSightings.push({
@@ -1993,6 +1993,7 @@ function updateForestVillagerSightings(dt){
       const walkT = Math.min(1, elapsed/walkDuration);
       s.mesh.position.x = s.startX + (s.endX-s.startX)*walkT;
       s.mesh.position.z = s.startZ + (s.endZ-s.startZ)*walkT;
+      s.mesh.position.y = groundStandY(s.mesh.position.x, s.mesh.position.z);
       const curPx = s.startPx + (s.endPx-s.startPx)*walkT;
       const curPy = s.startPy + (s.endPy-s.startPy)*walkT;
       let alpha = elapsed<0.4 ? elapsed/0.4 : (s.life<0.6 ? Math.max(0, s.life/0.6) : 1);
@@ -2019,6 +2020,7 @@ function updatePaleEncounters(dt){
     const walkT = Math.min(1, elapsed/walkDuration);
     p.mesh.position.x = p.startX + (p.endX-p.startX)*walkT;
     p.mesh.position.z = p.startZ + (p.endZ-p.startZ)*walkT;
+    p.mesh.position.y = groundStandY(p.mesh.position.x, p.mesh.position.z);
     let alpha;
     if(elapsed<0.4) alpha = elapsed/0.4;
     else if(p.life<0.6) alpha = Math.max(0, p.life/0.6);
@@ -2128,17 +2130,28 @@ function updateVillagers(dt){
     v.moveTimer -= dt;
     if(v.moveTimer<=0){
       v.moveTimer = 2+Math.random()*3;
-      const ang = Math.random()*Math.PI*2;
-      const dist = 20+Math.random()*30;
-      v.tx = v.x + Math.cos(ang)*dist;
-      v.ty = v.y + Math.sin(ang)*dist;
-      v.tx = Math.max(TILE, Math.min(CW-TILE, v.tx));
-      v.ty = Math.max(TILE, Math.min(CH-TILE, v.ty));
+      let tx, ty, tries = 0, ok = false;
+      do{
+        const ang = Math.random()*Math.PI*2;
+        const dist = 20+Math.random()*30;
+        tx = Math.max(TILE, Math.min(CW-TILE, v.x + Math.cos(ang)*dist));
+        ty = Math.max(TILE, Math.min(CH-TILE, v.y + Math.sin(ang)*dist));
+        tries++;
+        ok = !isSolidPx(tx, ty, 10);
+      } while(!ok && tries<8);
+      if(ok){ v.tx = tx; v.ty = ty; }
+      // 建物を避けた行き先が見つからなければ、無理に動かさずその場に留まる
     }
     if(v.tx!=null){
       const dx = v.tx-v.x, dy = v.ty-v.y;
       const d = Math.hypot(dx,dy);
-      if(d>2){ v.x += (dx/d)*20*dt; v.y += (dy/d)*20*dt; }
+      if(d>2){
+        const nx = v.x + (dx/d)*20*dt;
+        const ny = v.y + (dy/d)*20*dt;
+        // 建物にぶつかる方向にはすり抜けず、そこで行き先をあきらめる
+        if(!isSolidPx(nx, v.y, 10)) v.x = nx; else { v.tx=null; v.ty=null; }
+        if(!isSolidPx(v.x, ny, 10)) v.y = ny; else { v.tx=null; v.ty=null; }
+      }
     }
   });
 }
@@ -4913,12 +4926,12 @@ function villagerBodyColor(id){
 function makePaleFigureMesh(){
   const g = new THREE.Group();
   const mat = new THREE.MeshStandardMaterial({color:'#F2EFE7', roughness:.7, emissive:'#2A2820', emissiveIntensity:.15});
-  const dress = new THREE.Mesh(new THREE.ConeGeometry(0.17, 0.56, 10), mat);
-  dress.position.y = 0.30;
+  const dress = new THREE.Mesh(new THREE.ConeGeometry(0.17, 0.45, 10), mat);
+  dress.position.y = 0.245;
   dress.castShadow = true;
   g.add(dress);
   const head = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 8), mat);
-  head.position.y = 0.66;
+  head.position.y = 0.55;
   head.castShadow = true;
   g.add(head);
   const shadowMesh = new THREE.Mesh(new THREE.CircleGeometry(0.22,16),
@@ -4927,6 +4940,7 @@ function makePaleFigureMesh(){
   shadowMesh.position.y = 0.01;
   shadowMesh.userData.isShadow = true;
   g.add(shadowMesh);
+  g.scale.setScalar(0.85);
   return g;
 }
 
@@ -5087,8 +5101,8 @@ function makeKokeshiBodyMesh(color){
     g.add(eye);
   });
 
-  // 頬の赤み：薄いピンクの平たい円
-  const cheekMat = new THREE.MeshBasicMaterial({color:'#F2A0A8', transparent:true, opacity:.75});
+  // 頬の赤み：薄いピンクの平たい円（他パーツと同じく光を受ける素材にして、夜に浮いて光って見えないようにする）
+  const cheekMat = new THREE.MeshStandardMaterial({color:'#F2A0A8', transparent:true, opacity:.75, roughness:.8});
   [-1, 1].forEach(side=>{
     const cheek = new THREE.Mesh(new THREE.CircleGeometry(0.024, 10), cheekMat);
     cheek.position.set(side*0.075, 0.435, 0.10);
@@ -5989,7 +6003,19 @@ function syncThree(){
       shadowMesh.scale.set(sh, sh, sh);
     }
 
-    if(playerLampLight) playerLampLight.position.set(wp.x, th+0.6, wp.z);
+    if(playerLampLight){
+      // 真上だと顔(カメラに見えている面)には光が回らず暗く沈んで見えるため、
+      // カメラのある側に少し寄せて、顔にも光が当たるようにする。
+      const camDx = activeCamera ? activeCamera.position.x - wp.x : 0;
+      const camDz = activeCamera ? activeCamera.position.z - wp.z : 1;
+      const camDist = Math.hypot(camDx, camDz) || 1;
+      const towardCam = 0.32;
+      playerLampLight.position.set(
+        wp.x + (camDx/camDist)*towardCam,
+        th + 0.5,
+        wp.z + (camDz/camDist)*towardCam
+      );
+    }
 
     // 走行中は足元に砂埃
     if(speedRatio > 0.2 && G.scene!=='house'){
