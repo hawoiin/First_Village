@@ -68,7 +68,7 @@
   .btn-row{display:flex;gap:10px;flex-wrap:wrap;}
 
   /* ---------- Game HUD ---------- */
-  .hud-top{display:flex;justify-content:flex-start;align-items:center;margin-bottom:8px;flex-wrap:nowrap;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px;}
+  .hud-top{display:flex;justify-content:flex-start;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px;padding-bottom:2px;}
   .hud-chip{
     background:#fff;border-radius:999px;padding:6px 14px;font-size:12.5px;font-weight:700;
     box-shadow:0 3px 0 rgba(90,70,40,.15);color:var(--wood-d);
@@ -123,15 +123,29 @@
   .tilt-band.bottom{ bottom:0; height:26%; background:linear-gradient(0deg, rgba(255,255,255,.35), rgba(255,255,255,0)); }
   .canvas-wrap{position:relative;}
   .prompt-bubble{
-    position:absolute;left:50%;top:8px;transform:translateX(-50%);
+    position:absolute;left:50%;top:68%;transform:translate(-50%,-50%);
     background:#fff;border-radius:999px;padding:6px 14px;font-size:12px;font-weight:700;
     box-shadow:0 3px 0 rgba(90,70,40,.15);color:var(--wood-d);pointer-events:none;
     display:none;white-space:nowrap;z-index:5;
   }
-  .toast-bubble{
+  .toast-stack{
     position:absolute;top:16px;left:50%;transform:translateX(-50%);
-    background:#2b2038;color:#F2EFE7;white-space:normal;max-width:340px;width:88%;
-    text-align:center;line-height:1.5;z-index:70;border-radius:14px;
+    width:88%;max-width:340px;z-index:70;pointer-events:none;
+    display:flex;flex-direction:column;gap:8px;
+  }
+  .toast-entry{
+    background:#2b2038;color:#F2EFE7;white-space:normal;
+    text-align:center;line-height:1.5;border-radius:14px;padding:7px 15px;
+    font-size:12px;font-weight:700;box-shadow:0 3px 0 rgba(90,70,40,.15);
+    opacity:0;transform:translateY(-8px) scale(.98);
+    transition:opacity .35s ease, transform .35s ease;
+  }
+  .toast-entry.show{ opacity:1;transform:translateY(0) scale(1); }
+  .toast-entry.fade-out{ opacity:0;transform:translateY(6px) scale(.97); }
+  .toast-entry.epiphany-toast{
+    background:linear-gradient(135deg, #3a2f52, #1f2a44);
+    font-style:italic;letter-spacing:.02em;
+    box-shadow:0 0 0 1px rgba(255,255,255,.08), 0 0 18px rgba(180,170,255,.35);
   }
 
   .controls-row{display:flex;justify-content:space-between;align-items:flex-end;margin-top:10px;gap:10px;flex-wrap:wrap;}
@@ -235,6 +249,8 @@
   .fade-screen.show{display:flex;}
   .fade-screen .fs-big{font-size:22px;font-weight:900;margin-bottom:8px;}
   .fade-screen .fs-sub{font-size:13px;color:#cfc3e0;}
+  .fade-screen .fs-hint{font-size:11px;color:#a99bc2;margin-top:18px;opacity:0;transition:opacity .5s ease;}
+  .fade-screen .fs-hint.show{opacity:1;}
 
   .footer-note{font-size:11px;color:#8a9c78;text-align:center;margin-top:10px;line-height:1.8;}
 
@@ -330,6 +346,7 @@
 <div class="fade-screen" id="fadeScreen">
   <div class="fs-big" id="fadeBig">おやすみなさい…</div>
   <div class="fs-sub" id="fadeSub"></div>
+  <div class="fs-hint" id="fadeHint">タップして進む</div>
 </div>
 
 <div id="devPanel" style="display:none;">
@@ -694,6 +711,27 @@ const DUO_AMBIENT_LINES = [
 const DUO_MISCHIEF_LINES = [
   '{a}が{b}を、こっそり驚かせようとしていた。',
   '{a}と{b}が、いたずらの相談でもしているようだった。',
+];
+
+// 立ち話・一人時間の中に、たまに混ざる少し内省的な一言。
+// エピファニー（プレイヤー視点の一人称）とは違い、あくまで村人を外から眺めた三人称の描写にとどめる。
+const DUO_POETIC_LINES = [
+  '{a}と{b}が、しばらく黙ったまま同じ方向を見ていた。',
+  '{a}の相槌に、{b}が少し間を置いてから頷いた。',
+  '{a}と{b}の会話が途切れた瞬間だけ、風の音がやけに大きく聞こえた。',
+  '{a}が{b}に何か言いかけて、結局違う話をしていた。',
+  '{b}の何気ない一言に、{a}がしばらく黙って考え込んでいた。',
+  '{a}と{b}が、同じ景色を見ているのに、違うことを考えているような顔をしていた。',
+  '{a}が{b}の話を聞きながら、少し遠くを見ていた。',
+];
+const SOLO_POETIC_LINES = [
+  '{name}が、遠くを見つめたまま、しばらく動かずにいた。',
+  '{name}が、何かを思い出したように、ふと足を止めた。',
+  '{name}が、空を見上げてから、小さく息を吐いていた。',
+  '{name}が、いつもと同じ道の途中で、少しだけ立ち止まっていた。',
+  '{name}が、風の音に耳を澄ませているようだった。',
+  '{name}が、誰かに何か言いかけて、結局何も言わずにいた。',
+  '{name}が、自分の影の長さを、なんとなく見つめていた。',
 ];
 
 const PRODUCTION_STYLES = [
@@ -1074,7 +1112,7 @@ function newGame(playerName, villageName, avatar, playerColor){
 
   const trees = [];
   for(let i=0;i<11;i++){
-    const t = randomFreeTile(map, solid, false, reserved);
+    const t = randomFreeTile(map, solid, false, reserved, true);
     if(t){ trees.push({c:t.c, r:t.r, shaken:false}); solid.add(t.c+','+t.r); }
   }
 
@@ -1107,6 +1145,7 @@ function newGame(playerName, villageName, avatar, playerColor){
     forestCooldownUntil:0,
     viewZoomHouse: VIEW_ZOOM_DEFAULT, viewZoomOutdoor: VIEW_ZOOM_DEFAULT,
     soundGameHighScore: 0,
+    epiphanies:[], epiphanyActionCount:0, epiphanyPending:0, specialDayToday:false,
   };
   spawnDailies(state);
   return state;
@@ -1287,13 +1326,14 @@ function computeFishSpots(map){
   return spots;
 }
 
-function randomFreeTile(map, solid, allowNearWater, reserved){
+function randomFreeTile(map, solid, allowNearWater, reserved, avoidFlower){
   for(let tries=0; tries<200; tries++){
     const c = 1+Math.floor(Math.random()*(COLS-2));
     const r = 1+Math.floor(Math.random()*(ROWS-2));
     if(solid.has(c+','+r)) continue;
     if(reserved && reserved.has(c+','+r)) continue;
     if(map[r][c]===2) continue;
+    if(avoidFlower && map[r][c]===4) continue;
     if(c===9 && map[r][c]===1) continue; // keep main path a bit clearer
     return {c,r};
   }
@@ -1336,6 +1376,7 @@ function saveGame(){
       forestCooldownUntil:G.forestCooldownUntil,
       viewZoomHouse:G.viewZoomHouse, viewZoomOutdoor:G.viewZoomOutdoor,
       soundGameHighScore:G.soundGameHighScore,
+      epiphanies:G.epiphanies, epiphanyActionCount:G.epiphanyActionCount, epiphanyPending:G.epiphanyPending,
     };
     localStorage.setItem('tsukurumura_save', JSON.stringify(slim));
   }catch(e){ /* storage unavailable, ignore */ }
@@ -1426,6 +1467,10 @@ function loadSaveIntoGame(data){
   };
   G.depthsUnlocked = !!data.depthsUnlocked;
   G.depthsCompleted = !!data.depthsCompleted;
+  G.epiphanies = data.epiphanies || [];
+  G.epiphanyActionCount = data.epiphanyActionCount || 0;
+  G.epiphanyPending = data.epiphanyPending || 0;
+  G.specialDayToday = false;
   if(!G.depthsUnlocked && G.loreCount.note>=DEPTHS_UNLOCK_NOTE && G.loreCount.odd>=DEPTHS_UNLOCK_ODD){
     G.depthsUnlocked = true;
   }
@@ -1599,7 +1644,7 @@ function renderGameShell(){
       <div class="tilt-band top"></div>
       <div class="tilt-band bottom"></div>
       <div class="prompt-bubble" id="promptBubble"></div>
-      <div class="prompt-bubble toast-bubble" id="toastBubble"></div>
+      <div class="toast-stack" id="toastStack"></div>
     </div>
     <div class="controls-row">
       <div class="joystick-wrap" id="joystickWrap">
@@ -2175,10 +2220,19 @@ function updateVillageAmbientTimer(dt){
     if(pair) break;
   }
 
+  // ごく低確率で、いつもの立ち話/一人時間の代わりに少し内省的な一言を混ぜる
+  // 特別な朝の日は、村全体が心なしか内省的な空気になる
+  const poeticChance = G.specialDayToday ? 0.4 : 0.15;
+
   if(pair && Math.random()<0.55){
     const [a,b] = pair;
-    const mischief = (a.personality==='いたずら' || b.personality==='いたずら') && Math.random()<0.4;
-    const bank = mischief ? DUO_MISCHIEF_LINES : DUO_AMBIENT_LINES;
+    let bank;
+    if(Math.random() < poeticChance){
+      bank = DUO_POETIC_LINES;
+    } else {
+      const mischief = (a.personality==='いたずら' || b.personality==='いたずら') && Math.random()<0.4;
+      bank = mischief ? DUO_MISCHIEF_LINES : DUO_AMBIENT_LINES;
+    }
     const line = randPick(bank).replace('{a}', a.name).replace('{b}', b.name);
     // 束の間、二人ともその場に立ち止まって話し込む
     a.tx = null; a.ty = null; a.moveTimer = 1.6+Math.random()*0.8;
@@ -2188,7 +2242,7 @@ function updateVillageAmbientTimer(dt){
     showFlavorToast(line);
   } else {
     const v = randPick(G.villagers);
-    const bank = SOLO_IDLE_LINES[v.personality];
+    const bank = Math.random() < poeticChance ? SOLO_POETIC_LINES : SOLO_IDLE_LINES[v.personality];
     if(!bank) return;
     const line = randPick(bank).replace('{name}', v.name);
     v.tx = null; v.ty = null; v.moveTimer = 1.2+Math.random()*0.8;
@@ -2344,7 +2398,7 @@ function doAction(){
   if(it.type==='villager') return talkTo(it.ref);
   if(it.type==='door') return enterBuilding(it.ref);
   if(it.type==='exit') return exitHouse();
-  if(it.type==='bed') return sleep();
+  if(it.type==='bed') return openBedMenu();
   if(it.type==='furniture') return openFurnitureMenu(it.ref);
   if(it.type==='forestGate') return tryEnterForest();
   if(it.type==='forestExit') return exitForest();
@@ -2416,6 +2470,7 @@ function shakeTree(tree){
   addItem(got,1);
   addParticle(`+1 ${getItemDef(got).icon}`, tree.c*TILE+TILE/2, tree.r*TILE);
   renderInventoryStrip(); saveGame();
+  registerMundaneAction('tree');
 }
 
 function digSparkle(sp){
@@ -2428,6 +2483,7 @@ function digSparkle(sp){
   if(got){ addItem(got,1); addParticle(`+1 ${getItemDef(got).icon}`, sp.c*TILE+TILE/2, sp.r*TILE); }
   else addParticle(`+${amt} 💰`, sp.c*TILE+TILE/2, sp.r*TILE);
   renderInventoryStrip(); saveGame(); renderGameShellTop();
+  registerMundaneAction('dig');
 }
 
 function catchBug(bug){
@@ -2435,6 +2491,7 @@ function catchBug(bug){
   addItem(bug.type,1);
   addParticle(`+1 ${getItemDef(bug.type).icon}`, bug.x, bug.y);
   renderInventoryStrip(); saveGame();
+  registerMundaneAction('bug');
 }
 
 /* ---------- Forest zone actions ---------- */
@@ -2595,13 +2652,157 @@ function touchMemoryTree(ref){
   }
 }
 
-function showFlavorToast(text){
-  const el = document.getElementById('toastBubble');
-  if(!el) return;
+const MAX_VISIBLE_TOASTS = 3;
+const activeToasts = []; // {el, timer, removed}
+function queueToast(text, isEpiphany){
+  const stack = document.getElementById('toastStack');
+  if(!stack) return;
+  // 表示上限を超える場合は、一番古いものから先に片付ける
+  while(activeToasts.length >= MAX_VISIBLE_TOASTS){
+    removeToastEntry(activeToasts[0], true);
+  }
+  const el = document.createElement('div');
+  el.className = 'toast-entry' + (isEpiphany ? ' epiphany-toast' : '');
   el.textContent = text;
-  el.style.display = 'block';
-  clearTimeout(window.__toastTimer);
-  window.__toastTimer = setTimeout(()=>{ el.style.display='none'; }, 2400);
+  stack.insertBefore(el, stack.firstChild); // 新しいものを一番上に。古いものは自然と下へ押し下げられる
+  requestAnimationFrame(()=>{ requestAnimationFrame(()=> el.classList.add('show')); });
+  // 文字数が多いほど、また「気づき」はゆっくり読めるように長めに表示する
+  const base = isEpiphany ? 2400 : 1600;
+  const perChar = isEpiphany ? 160 : 100;
+  const duration = Math.min(9000, base + text.length*perChar);
+  const entry = {el, timer:null, removed:false};
+  entry.timer = setTimeout(()=> removeToastEntry(entry, false), duration);
+  activeToasts.push(entry);
+}
+function removeToastEntry(entry, immediate){
+  if(!entry || entry.removed) return;
+  entry.removed = true;
+  clearTimeout(entry.timer);
+  const idx = activeToasts.indexOf(entry);
+  if(idx>=0) activeToasts.splice(idx,1);
+  entry.el.classList.remove('show');
+  entry.el.classList.add('fade-out');
+  setTimeout(()=>{ entry.el.remove(); }, immediate?150:350);
+}
+function showFlavorToast(text){
+  queueToast(text, false);
+}
+
+/* ---------- 気づき（エピファニー） ---------- */
+// 何でもない行動（木を揺らす・キラキラを掘る・虫を捕まえる・釣る・村人と話す等）を
+// 一定回数積み重ねるたびに、ふっと詩的な一行が浮かぶ。ためた「気づき」は特別な朝の伏線になる。
+const EPIPHANY_ACTIONS_PER_LINE = 7;
+const EPIPHANY_LINES = [
+  '木を揺らす手のひらに、去年の冬のことがよぎった。なぜ今なのかは分からない。',
+  '虫かごの中で羽ばたく音がして、そういえば誰かの声を久しく聞いていない気がした。',
+  '土の中から出てきたのは石ころひとつ。それでもしばらく手のひらで転がしていた。',
+  '釣り糸がゆるむ一瞬、村のことも自分のことも、どうでもよくなる時間があった。',
+  '誰かと交わした何でもない相槌が、帰り道でふと違う意味を持ちはじめた。',
+  '同じ道を歩いているはずなのに、今日だけ少し遠回りに感じた。',
+  'ポケットの中身を数えてみたら、増えたものより、無くしたものの方が気になった。',
+  '誰かの名前を呼ぼうとして、少しの間、自分の名前を忘れかけた。',
+  '水面に映る空を見ていたら、村全体がその中に沈んでいるような気がした。',
+  '何を拾ったのかより、拾おうとかがんだ姿勢の方をよく覚えている。',
+  '同じ話をもう一度されて、それでも今日は少しだけ違って聞こえた。',
+];
+// 昼にしか成立しない情景（木漏れ日など）はここに分けて、夜に出ないようにする
+const EPIPHANY_LINES_DAY = [
+  '木漏れ日が地面で揺れているのを見て、揺れているのは光の方だと今さら気づいた。',
+  '空を横切る鳥の影が、地面をひとすじだけ横切っていった。',
+  '風が吹くたびに、葉の音の方が一足先に届いた。',
+  '日向にしゃがむと、影の輪郭だけがやけにはっきりして見えた。',
+];
+// 夜専用の一行
+const EPIPHANY_LINES_NIGHT = [
+  '虫の声がふっと止んで、こちらを見られているような静けさが少しだけ怖かった。',
+  '月明かりの下では、通い慣れた道さえ、少し知らない場所みたいに見えた。',
+  'どこかの窓の灯りが一つ消えて、誰かの一日もまた終わったのだと思った。',
+];
+// 行動ごとの専用プール（その行動をしている時だけ出てきやすい一言）
+const EPIPHANY_POOLS = {
+  tree: [
+    '木を揺らすたび、何か落ちてくるまでのその一瞬だけ、時間が止まる気がする。',
+    '幹に触れた指先が、いつも少しだけ冷たいままだった。',
+    '揺れる枝の音を聞きながら、今日という日のことをすっかり忘れていた。',
+    '落ちてきたものより、木が揺れる音の方をよく覚えている。',
+    '同じ木のはずなのに、今日は少しだけ重たく感じた。',
+    '木を揺すった手のひらに、まだ小さな振動が残っている。',
+    '葉が一枚だけ落ちてきて、それが自分宛てのような気がした。',
+    '何度揺らしても、木はいつも同じ顔をしている。',
+    '木の下にできた影の形が、今日はいつもと違って見えた。',
+    '揺れが収まったあとの静けさの方が、なぜか印象に残った。',
+  ],
+  bug: [
+    '網を振った瞬間だけ、他のことは何も考えていなかった。',
+    '逃げていく羽音を聞きながら、追いかけなかった自分にほっとした。',
+    '虫かごの中の羽ばたきが、しばらく耳から離れなかった。',
+    '同じ場所で同じ虫を待つ時間が、思ったより嫌いではなかった。',
+    '虫の影が地面を横切るのを、ただ目で追っていた。',
+    '網の中で静かになった虫を見て、少しだけ気まずくなった。',
+    '捕まえるより、待っている時間の方が長かったことに今気づいた。',
+    '逃げられた瞬間、なぜかほんの少し笑ってしまった。',
+    '虫かごを覗き込む自分の顔が、水面にぼんやり映っていた。',
+    '同じ羽音でも、今日だけ少し違う音に聞こえた。',
+  ],
+  dig: [
+    '土を掘る手が止まった瞬間、何を探していたのか一瞬分からなくなった。',
+    '出てきたものより、掘っている間の土の匂いの方を覚えていた。',
+    '同じ場所を掘り返しても、出てくるものはいつも違う。',
+    '手についた土を払いながら、しばらく地面を見つめていた。',
+    '何かを見つけた喜びより、掘り終えた後の静けさの方が大きかった。',
+    '土の中には、思ったより多くの時間が埋まっている気がした。',
+    '何かに当たった手応えがあった瞬間だけ、心が少し跳ねた。',
+    '掘り返した跡を見て、誰かに見られたような気恥ずかしさがあった。',
+    '何も出てこなかった穴を、しばらくそのままにしておいた。',
+    '土をかぶった手のひらが、思ったより温かかった。',
+  ],
+  fish: [
+    '糸が張る感覚より、待っている間の水面の方をよく見ていた。',
+    '何も釣れない時間も、思ったより悪くなかった。',
+    '引きの強さで、相手の大きさを勝手に想像していた。',
+    '水面に映る自分の顔を、釣れるまでずっと見ていた。',
+    '逃げられた瞬間、悔しさより先に静けさがきた。',
+    '竿を上げる直前の数秒が、いつも一番長く感じる。',
+    '同じ場所に糸を垂らしても、今日は少し違う気持ちだった。',
+    '魚影が一瞬だけ見えて、それだけで満足してしまった。',
+    '水の音を聞きながら、何も考えていない時間が流れていた。',
+    '釣れたことより、待っていた時間の方が長く記憶に残りそうだった。',
+  ],
+  talk: [
+    '相槌を打ちながら、実は少し別のことを考えていた。',
+    '同じ話を聞いても、今日は少しだけ違う相槌になった。',
+    '言葉の内容より、声のトーンの方が記憶に残った。',
+    '話を終えて別れたあと、言い忘れたことが一つだけ浮かんだ。',
+    '相手の表情より、自分の返事の方が気になっていた。',
+    '何気ない世間話のはずが、帰り道でふと引っかかった。',
+    'うなずいた回数の方が、話した言葉より多かった気がする。',
+    '同じ挨拶でも、声のかけ方ひとつで少し違って聞こえた。',
+    '話の途中で、相手の後ろの景色の方を見てしまっていた。',
+    '別れ際の一言だけが、やけにはっきり耳に残った。',
+  ],
+};
+function registerMundaneAction(category){
+  G.epiphanyActionCount = (G.epiphanyActionCount||0) + 1;
+  if(G.epiphanyActionCount < EPIPHANY_ACTIONS_PER_LINE) return;
+  G.epiphanyActionCount = 0;
+  let pool;
+  if(Math.random() < 0.2){
+    // たまに行動と関係のない、その時間帯ならではの情景を混ぜる
+    pool = G.phase==='night' ? EPIPHANY_LINES_NIGHT : EPIPHANY_LINES_DAY;
+  } else if(category && EPIPHANY_POOLS[category]){
+    pool = EPIPHANY_POOLS[category].concat(EPIPHANY_LINES);
+  } else {
+    pool = EPIPHANY_LINES.concat(G.phase==='night' ? EPIPHANY_LINES_NIGHT : EPIPHANY_LINES_DAY);
+  }
+  const line = randPick(pool);
+  G.epiphanies = G.epiphanies || [];
+  G.epiphanies.push({text:line, day:G.day});
+  G.epiphanyPending = (G.epiphanyPending||0) + 1;
+  showEpiphanyToast(line);
+  saveGame();
+}
+function showEpiphanyToast(text){
+  queueToast(text, true);
 }
 
 function shakeForestTree(tree){
@@ -2612,6 +2813,7 @@ function shakeForestTree(tree){
   addItem(got,1);
   addParticle(`+1 ${getItemDef(got).icon}`, tree.c*TILE+TILE/2, tree.r*TILE);
   renderInventoryStrip(); saveGame();
+  registerMundaneAction('tree');
 }
 
 function shakeAncientTree(tree){
@@ -2623,6 +2825,7 @@ function shakeAncientTree(tree){
   addItem(got,n);
   addParticle(`+${n} ${getItemDef(got).icon}`, tree.c*TILE+TILE/2, tree.r*TILE);
   renderInventoryStrip(); saveGame();
+  registerMundaneAction('tree');
 }
 
 function digForestSparkle(sp){
@@ -2636,6 +2839,7 @@ function digForestSparkle(sp){
   if(got){ addItem(got,1); addParticle(`+1 ${getItemDef(got).icon}`, sp.c*TILE+TILE/2, sp.r*TILE); }
   else addParticle(`+${amt} 💰`, sp.c*TILE+TILE/2, sp.r*TILE);
   renderInventoryStrip(); saveGame(); renderGameShellTop();
+  registerMundaneAction('dig');
 }
 
 let fishing = false;
@@ -2666,6 +2870,7 @@ function finishFishing(success){
     const got = table[Math.floor(Math.random()*table.length)];
     addItem(got,1);
     addParticle(`+1 ${getItemDef(got).icon}`, G.player.x, G.player.y-20);
+    registerMundaneAction('fish');
   } else {
     addParticle('…にげられた', G.player.x, G.player.y-20);
   }
@@ -2679,6 +2884,7 @@ function effectiveScoutCost(v){
 }
 
 function talkTo(v){
+  registerMundaneAction('talk');
   const lineIsRequest = Math.random()<0.3 && !isRecruited(v);
   let bodyHtml, footHtml='';
   if(lineIsRequest){
@@ -4456,9 +4662,40 @@ function renderCraftModal(){
 }
 
 /* ---------- Sleep / day cycle ---------- */
+function openBedMenu(){
+  const isNight = G.phase==='night';
+  const question = isNight ? '眠って朝を迎える？' : '少し横になって休む？';
+  openModal(`
+    <h2>🛏️ ベッド</h2>
+    <p class="mdesc">${question}</p>
+    <div class="btn-row">
+      <button class="mini-btn buy" id="confirmSleep">${isNight?'😴 眠る':'💤 横になる'}</button>
+      <button class="mini-btn" id="cancelSleep">やめる</button>
+    </div>
+  `);
+  document.getElementById('confirmSleep').onclick = ()=>{ closeModal(); sleep(); };
+  document.getElementById('cancelSleep').onclick = closeModal;
+}
 function sleep(){
   if(G.phase==='night') wakeUpToNextDay();
   else restUntilNight();
+}
+
+// 表示された文章を読み終えるまで自動では消えず、タップ/クリックで進める
+function armFadeTapToContinue(minDelay){
+  const fs = document.getElementById('fadeScreen');
+  const hint = document.getElementById('fadeHint');
+  let canDismiss = false;
+  setTimeout(()=>{ canDismiss = true; hint.classList.add('show'); }, minDelay||500);
+  const dismiss = ()=>{
+    if(!canDismiss) return;
+    fs.classList.remove('show');
+    hint.classList.remove('show');
+    fs.removeEventListener('click', dismiss);
+    fs.removeEventListener('touchend', dismiss);
+  };
+  fs.addEventListener('click', dismiss);
+  fs.addEventListener('touchend', dismiss);
 }
 
 function wakeUpToNextDay(){
@@ -4472,6 +4709,19 @@ function wakeUpToNextDay(){
     G.day += 1;
     G.phase = 'day';
     G.phaseElapsed = 0;
+    G.epiphanyPending = G.epiphanyPending || 0;
+    if(G.epiphanyPending >= 3){
+      G.specialDayToday = true;
+      G.epiphanyPending -= 3;
+      const recent = G.epiphanies.slice(-3);
+      const recap = recent.length ? recent[Math.floor(Math.random()*recent.length)].text : '';
+      big.textContent = `${G.day}日目の朝　――なんでもない一日`;
+      sub.textContent = recap || '積み重なっていた小さな気づきが、そっと胸をよぎる。';
+    } else {
+      G.specialDayToday = false;
+      big.textContent = `${G.day}日目の朝`;
+      sub.textContent = '今日もいい一日になりますように。';
+    }
     applyPhaseLighting();
     refreshBgmForCurrentPhase();
     spawnDailies(G);
@@ -4479,10 +4729,8 @@ function wakeUpToNextDay(){
     const hb = G.buildings.find(b=>b.id==='house');
     G.player.x = hb.doorC*TILE+TILE/2; G.player.y = hb.doorR*TILE+TILE/2+16;
     saveGame();
-    big.textContent = `${G.day}日目の朝`;
-    sub.textContent = '今日もいい一日になりますように。';
     renderGameShellTop();
-    setTimeout(()=>{ fs.classList.remove('show'); }, 1200);
+    armFadeTapToContinue(600);
   }, 1100);
 }
 
@@ -4505,7 +4753,7 @@ function restUntilNight(){
     big.textContent = '夜になった';
     sub.textContent = '村から人の気配が消えている。';
     renderGameShellTop();
-    setTimeout(()=>{ fs.classList.remove('show'); }, 1200);
+    armFadeTapToContinue(600);
   }, 1100);
 }
 
@@ -4919,7 +5167,7 @@ function tileColor3D(t){
 }
 
 function villagerBodyColor(id){
-  const map = {moko:'#C79A6B', pyon:'#F7C6D9', konta:'#F0A34E', ponzu:'#DDE4E8', penta:'#4A5A6A'};
+  const map = {moko:'#C79A6B', pyon:'#F7C6D9', konta:'#4A4A52', ponzu:'#DDE4E8', penta:'#4A5A6A'};
   return map[id] || '#C7B8E8';
 }
 
@@ -5535,31 +5783,32 @@ function buildPlayerMesh(color, avatar){
 
 function applyPhaseLighting(){
   const night = G.phase==='night';
+  const special = !!G.specialDayToday;
   const root = document.documentElement;
   if(night){
-    root.style.setProperty('--sky1', '#2B3454');
-    root.style.setProperty('--sky2', '#4A5480');
+    root.style.setProperty('--sky1', special ? '#3A3A5E' : '#2B3454');
+    root.style.setProperty('--sky2', special ? '#5A5882' : '#4A5480');
     root.style.setProperty('--title-color', '#F5EFDC');
     root.style.setProperty('--title-shadow', 'rgba(20,18,45,.55)');
     root.style.setProperty('--sub-color', '#B9C6FF');
   } else {
-    root.style.setProperty('--sky1', '#BEE7F5');
-    root.style.setProperty('--sky2', '#E8F6E0');
+    root.style.setProperty('--sky1', special ? '#F5E3C8' : '#BEE7F5');
+    root.style.setProperty('--sky2', special ? '#F0E9DA' : '#E8F6E0');
     root.style.setProperty('--title-color', '#8C6230');
     root.style.setProperty('--title-shadow', '#fff');
     root.style.setProperty('--sub-color', '#7a9c68');
   }
   if(hemiLight){
-    hemiLight.color.setHex(night ? 0x33395C : 0xE8F6FF);
-    hemiLight.groundColor.setHex(night ? 0x1E2438 : 0x8fae6f);
-    hemiLight.intensity = night ? 0.35 : 0.95;
+    hemiLight.color.setHex(night ? (special?0x3D3A5C:0x33395C) : (special?0xFFF3E0:0xE8F6FF));
+    hemiLight.groundColor.setHex(night ? (special?0x241E38:0x1E2438) : (special?0x9fae7f:0x8fae6f));
+    hemiLight.intensity = night ? 0.35 : (special?0.9:0.95);
   }
   if(dirLight){
-    dirLight.color.setHex(night ? 0x9FB4FF : 0xFFF6E0);
-    dirLight.intensity = night ? 0.22 : 0.85;
+    dirLight.color.setHex(night ? (special?0xB4A9FF:0x9FB4FF) : (special?0xFFE3B0:0xFFF6E0));
+    dirLight.intensity = night ? (special?0.24:0.22) : (special?0.75:0.85);
   }
   if(scene3d){
-    const bgColor = night ? 0x232A45 : 0xffffff;
+    const bgColor = night ? (special?0x2A2440:0x232A45) : (special?0xF7EFE0:0xffffff);
     scene3d.background = new THREE.Color(bgColor);
     if(!scene3d.fog) scene3d.fog = new THREE.Fog(bgColor, 9, 26);
     else scene3d.fog.color.setHex(bgColor);
@@ -5573,7 +5822,7 @@ function initThreeScene(){
   scene3d = new THREE.Scene();
 
   renderer3d = new THREE.WebGLRenderer({antialias:true});
-  renderer3d.setSize(RENDER_W, RENDER_H);
+  renderer3d.setSize(RENDER_W, RENDER_H, false);
   renderer3d.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
   renderer3d.shadowMap.enabled = true;
   renderer3d.shadowMap.type = THREE.PCFSoftShadowMap;
